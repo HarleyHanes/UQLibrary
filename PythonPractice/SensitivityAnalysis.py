@@ -9,11 +9,38 @@ import numpy as np
 import sys
 #import seaborne as seaborne
 
+
+#Define class "options", this will be the class used to collect algorithm options for functions
+#   -Subclasses: jacOptions, plotOptions, sampOptions
+class uqOptions:
+    def __init__(self,jac=jacOptions(),plot=plotOptions(),samp=sampOptions()):
+        self.jac=jac
+        self.plot=plot
+        self.samp=samp
+    pass
+
+class jacOptions:
+    def __init__(self,xDelta=10^(-6), method='complex', scale='y'):
+        self.xDelta=xDelta                        #Input perturbation for calculating jacobian
+        self.scale=scale                          #scale can be y, n, or both for outputing scaled, unscaled, or both
+        self.method=method                        #method used for caclulating Jacobian NOT CURRENTLY IMPLEMENTED
+    pass
+
+class sampOptions:
+    def __init__(self, nSamp=1000, dist='norm', var=1):
+        self.nSamp = nSamp                      #Number of samples to be generated for GSA
+        self.dist = dist                        #String identifying sampling distribution for parameters
+                                                #       Supported distributions:
+        self.var=var                            # sample variance, DON'T LIKE THIS CURRENTLY- variance and mean are
+                                                                                    # drawn from two seperate places
+        pass
+
+#
+
 #Define class "model", this will be the class used to collect input information for all functions
 class model:
     #Model sets should be initialized with base parameter settings, covariance Matrix, and eval function that
     #   takes in a vector of POIs and outputs a vector of QOIs
-
     def __init__(self,baseParams=np.empty, covMat=np.empty, evalFcn=np.empty):
         self.basePOIs=baseParams
         self.cov=covMat
@@ -33,7 +60,7 @@ class lsa:
     pass
 
 # Local Sensitivity Analysis Functions
-def LSA(model, **kwargs):
+def LSA(model, options):
     # LSA implements the following local sensitivity analysis methods on system specific by "model" object
         # 1) Jacobian
         # 2) Scaled Jacobian for Relative Sensitivity Index (RSI)
@@ -51,9 +78,9 @@ def LSA(model, **kwargs):
         raise Exception('Unrecognized inputs to LSA detected, only provide  h= and xBase= as additional arguments')
                                                                                 #Stop compiling if present
     # Calculate Jacobian
-    jacRaw=GetJacobian(model, h=kwargs['h'], xBase=kwargs['xBase'], scale=False)
+    jacRaw=GetJacobian(model, options.jac, scale=False)
     # Calculate RSI
-    jacRSI=GetJacobian(model, h=kwargs['h'], xBase=kwargs['xBase'], scale=False)
+    jacRSI=GetJacobian(model, options.jac, scale=True)
     # Calculate Fisher Information Matrix
     fisherMat=np.dot(np.transpose(jacRaw), jacRaw)
 
@@ -62,26 +89,11 @@ def LSA(model, **kwargs):
 
 
 
-def GetJacobian(model, **kwargs):
+def GetJacobian(model, jacOptions, **kwargs):
     # GetJacobian calculates the Jacobian for n QOIs and p POIs
     # Required Inputs: object of class "model" (.cov element not required)
+    #                  object of class "jacOptions"
     # Optional Inputs: alternate POI position to estimate Jacobian at (*arg) or complex step size (h)
-
-
-    # Manage Function Inputs
-    if 'h' in kwargs:                                                       # Assign complex step value
-        h=kwargs["h"]
-        if not isinstance(h, float):                                        # Check provided 'h' value is float
-
-            raise Exception("Non-float value provided for 'h': h=" + str(h))            # Stop compiling if 'h' not float
-    else:
-        h = 1e-6                                                              # Give default h value of 1e-6
-    if 'xBase' in kwargs:                                                   # Assign base parameter values
-        xBase=kwargs["xBase"]
-        if not isinstance(xBase, (np.ndarray, np.generic)):                 # Check base values entered as np array
-            raise Exception("Non-np.array value provided for 'xBase' ")     # Stop compiling if not
-    else:
-        xBase=model.basePOIs                                                # Give default xBase of model's base POIs
     if 'scale' in kwargs:                                                   # Determine whether to scale derivatives
                                                                             #   (for use in relative sensitivity indices)
         scale = kwargs["scale"]
@@ -90,7 +102,12 @@ def GetJacobian(model, **kwargs):
     else:
         scale = False                                                       # Function defaults to no scaling
 
-    yBase=model.evalFcn(xBase)                                              # Get base QOI values
+    #Load options parameters for increased readibility
+    xBase=jacOptions.xBase
+    xDelta=jacOptions.xDelta
+
+    #Initializae other parameters
+    yBase=model.evalFcn(jacOptions.xBase)                                   # Get base QOI values
     nPOIs = model.nPOIs                                                     # Get number of parameters (nPOIs)
     nQOIs = model.nQOIs                                                     # Get number of outputs (nQOIs)
 
@@ -98,9 +115,9 @@ def GetJacobian(model, **kwargs):
 
     for iPOI in range(0, nPOIs):                                            # Loop through POIs
         # Isolate Parameters
-        xPert = xBase + np.zeros(shape=xBase.shape)*1j                      # Define Perturbed value
-        xPert[iPOI] += h * 1j                                               # Complex Step
-        yPert = model.evalFcn(xPert)                                        # Get Perturbed Output
+        xPert = xBase + np.zeros(shape=xBase.shape)*1j                      # Initialize Complex Perturbed input value
+        xPert[iPOI] += xDelta * 1j                                          # Add complex Step in input
+        yPert = model.evalFcn(xPert)                                        # Calculate perturbed output
         for jQOI in range(0, nQOIs):                                        # Loop through QOIs
             jac[jQOI, iPOI] = np.imag(yPert[jQOI] / h)                      # Estimate Derivative w/ 2nd order complex
             #Only Scale Jacobian if 'scale' value is passed True in function call
@@ -111,27 +128,30 @@ def GetJacobian(model, **kwargs):
     return jac                                                              # Return Jacobian
 #
 # #Global Sensitivity Analysis Functions
-# def GSA(params, evalFcn):
-#     #Get Parameter Space Sample
-#     [evalMat, sampleMat]=ParamSample
-#     #Plot Correlations and Distributions
-#     PlotGSA(evalMat, sampleMat)
-#     #Calculate Sobol Indices
-#     sobol=GetSobol(evalMat, sampleMat)
-#     return evalMat, sampleMat, sobol
-#
-# def ParamSample:
-#     #Intialize Variables
-#     sampleSize=5;
-#     nPOIs=len(params)
-#     evalMat=np.empty(shape=(sampleSize, nPOIs), dtype=float)
-#     #Sample Parameter Space
-#     sampleMat=(np.random.randn(sampleSize, nPOIs)+1)*params     #Sample normal distribution with mu=epsilon=base param value
-#     #Evaluate over Parameter Space Sample
-#     for iSample in range(0,sampleSize):
-#         evalMat[iSample,]=evalFcn(sampleMat[iSample,])
-#
-#     return evalMat, sampleMat
+def GSA(model, options):
+    #Get Parameter Space Sample
+    [evalMat, sampleMat]=ParamSample(sampOptions)
+    #Plot Correlations and Distributions
+    PlotGSA(evalMat, sampleMat)
+    #Calculate Sobol Indices
+    sobol=GetSobol(evalMat, sampleMat)
+    return evalMat, sampleMat, sobol
+
+def ParamSample(params,sampOptions):
+    #Intialize Variables
+    nPOIs=len(params)
+    evalMat=np.empty(shape=(sampOptions.nSamp, nPOIs), dtype=float)
+
+    #Sample Parameter Space
+    if sampOptions.dist.lower()=='norm':                                             #Normal Distribution
+        sampleMat=np.random.randn(sampleSize, nPOIs)*sqrt(sampOptions.var)+params    #Sample normal distribution with mu=params, sigma^2=sampOptions.var
+    else:
+        raise Exception("Invalid value for options.samp.dist")                       #Raise Exception if invalide distribution is entered
+
+    #Evaluate over Parameter Space Sample
+    for iSample in range(0,sampleSize):
+        evalMat[iSample,]=evalFcn(sampleMat[iSample,])
+    return evalMat, sampleMat
 #
 #
 # def PlotGSA(evalMat, sampleMat):
