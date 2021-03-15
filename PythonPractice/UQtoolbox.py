@@ -1,4 +1,4 @@
-#SensitivityAnalysis
+#UQtoolbox
 #Module for calculating local sensitivity indices, parameter correlation, and Sobol indices for an arbitrary model
 #Authors: Harley Hanes, NCSU, hhanes@ncsu.edu
 #Required Modules: numpy, seaborne
@@ -12,13 +12,6 @@ import sys
 
 #Define class "options", this will be the class used to collect algorithm options for functions
 #   -Subclasses: jacOptions, plotOptions, sampOptions
-class uqOptions:
-    def __init__(self,jac=jacOptions(),plot=plotOptions(),samp=sampOptions()):
-        self.jac=jac
-        self.plot=plot
-        self.samp=samp
-    pass
-
 class jacOptions:
     def __init__(self,xDelta=10^(-6), method='complex', scale='y'):
         self.xDelta=xDelta                        #Input perturbation for calculating jacobian
@@ -30,12 +23,18 @@ class sampOptions:
     def __init__(self, nSamp=1000, dist='norm', var=1):
         self.nSamp = nSamp                      #Number of samples to be generated for GSA
         self.dist = dist                        #String identifying sampling distribution for parameters
-                                                #       Supported distributions:
-        self.var=var                            # sample variance, DON'T LIKE THIS CURRENTLY- variance and mean are
-                                                                                    # drawn from two seperate places
+                                                #       Supported distributions: normal
+        pass
+class plotOptions:
+    def __init__(self,):
         pass
 
-#
+class uqOptions:
+    def __init__(self,jac=jacOptions(),plot=plotOptions(),samp=sampOptions()):
+        self.jac=jac
+        self.plot=plot
+        self.samp=samp
+    pass
 
 #Define class "model", this will be the class used to collect input information for all functions
 class model:
@@ -46,6 +45,7 @@ class model:
         self.cov=covMat
         self.evalFcn=evalFcn
         self.baseQOIs=evalFcn(baseParams)
+        self.sampDist='null'
         self.nPOIs=len(self.basePOIs)
         self.nQOIs=len(self.baseQOIs)
     pass
@@ -65,18 +65,8 @@ def LSA(model, options):
         # 1) Jacobian
         # 2) Scaled Jacobian for Relative Sensitivity Index (RSI)
         # 3) Fisher Information matrix
-    # Required Inputs: object of class "model"
-    # Optional Inputs: Analysis location, h  (Currently all settings for GetJacobian
+    # Required Inputs: object of class "model" and object of class options
     # Outputs: Object of class lsa with Jacobian, RSI, and Fisher information matrix
-    # Next Steps: Allow GetJacobian to pass keywords from kwargs only when they're present
-
-    # Check for unrecognized inputs
-    checkDict=kwargs.copy()                                                       #Create a copy dictionary
-    checkDict['h'] = 1                                                            #Add h and xBase if not already there
-    checkDict['xBase'] = 1
-    if checkDict.keys()>{"h","xBase"}:                                            #Check for extraneous inputs
-        raise Exception('Unrecognized inputs to LSA detected, only provide  h= and xBase= as additional arguments')
-                                                                                #Stop compiling if present
     # Calculate Jacobian
     jacRaw=GetJacobian(model, options.jac, scale=False)
     # Calculate RSI
@@ -103,11 +93,11 @@ def GetJacobian(model, jacOptions, **kwargs):
         scale = False                                                       # Function defaults to no scaling
 
     #Load options parameters for increased readibility
-    xBase=jacOptions.xBase
+    xBase=model.basePOIs
     xDelta=jacOptions.xDelta
 
     #Initializae other parameters
-    yBase=model.evalFcn(jacOptions.xBase)                                   # Get base QOI values
+    yBase=model.evalFcn(xBase)                                              # Get base QOI values
     nPOIs = model.nPOIs                                                     # Get number of parameters (nPOIs)
     nQOIs = model.nQOIs                                                     # Get number of outputs (nQOIs)
 
@@ -119,7 +109,7 @@ def GetJacobian(model, jacOptions, **kwargs):
         xPert[iPOI] += xDelta * 1j                                          # Add complex Step in input
         yPert = model.evalFcn(xPert)                                        # Calculate perturbed output
         for jQOI in range(0, nQOIs):                                        # Loop through QOIs
-            jac[jQOI, iPOI] = np.imag(yPert[jQOI] / h)                      # Estimate Derivative w/ 2nd order complex
+            jac[jQOI, iPOI] = np.imag(yPert[jQOI] / xDelta)                      # Estimate Derivative w/ 2nd order complex
             #Only Scale Jacobian if 'scale' value is passed True in function call
             if scale:
                 jac[jQOI, iPOI] *= xBase[iPOI] * np.sign(yBase[jQOI]) / (sys.float_info.epsilon + yBase[jQOI]**2)
@@ -129,60 +119,45 @@ def GetJacobian(model, jacOptions, **kwargs):
 #
 # #Global Sensitivity Analysis Functions
 def GSA(model, options):
-    #Get Parameter Space Sample
-    [evalMat, sampleMat]=ParamSample(sampOptions)
+    #Get Parameter Distributions
+    model=GetSampDist(model, options.samp)
     #Plot Correlations and Distributions
     #PlotGSA(evalMat, sampleMat)
     #Calculate Sobol Indices
-    sobol=GetSobol(evalMat, sampleMat)
-    return evalMat, sampleMat, sobol
+    gsaResults.sobol=GetSobol(model, options.samp)
+    return gsaResults
 
-def ParamSample(params,sampOptions):
-    #Intialize Variables
-    nPOIs=len(params)
-    evalMat=np.empty(shape=(sampOptions.nSamp, nPOIs), dtype=float)
-
-    #Sample Parameter Space
-    if sampOptions.dist.lower()=='norm':                                             #Normal Distribution
-        sampleMat=np.random.randn(sampleSize, nPOIs)*sqrt(sampOptions.var)+params    #Sample normal distribution with mu=params, sigma^2=sampOptions.var
-    else:
-        raise Exception("Invalid value for options.samp.dist")                       #Raise Exception if invalide distribution is entered
-
-    #Evaluate over Parameter Space Sample
-    for iSample in range(0,sampleSize):
-        evalMat[iSample,]=evalFcn(sampleMat[iSample,])
-    return evalMat, sampleMat
-
-def GetSobol(model,sobolOptions):
+def GetSobol(model,sampOptions):
     #GetSobol calculates sobol indices using satelli approximation
     #Inputs: model object (with evalFcn, sampDist, and nParams)
     #        sobolOptions obejct
     #Load options and data
-    nSamp=sobolOptions.nSamp
+    nSamp=sampOptions.nSamp
     sampDist=model.sampDist
     evalFcn=model.evalFcn
     #Make Parameter Sample Matrices
-    aSamp=sampDist(nSamp,1)
-    bSamp=sampDist(nSamp,1)
-    cSamp=numpy.concatenate(aSamp, bSamp)
-    dSamp=sampDist(nSamp,1)
+    sampA=sampDist(nSamp)
+    sampB=sampDist(nSamp)
+    sampC=np.concatenate((sampA, sampB))
+    sampD=sampDist(nSamp)
     #Calculate QOI vectors
     fA=evalFcn(sampA)
     fB=evalFcn(sampB)
     fC=evalFcn(sampC)
     #Initialize combined QOI sample matrices
-    fAb=np.empty([nSamp, nParams])
-    fBa=fAb.copy()
+    fAB=np.empty([nSamp, model.nPOIs])
+    fBA=fAB.copy()
     for iParams in range(0,nSamp):
         #Define sampAb to be A with the ith parameter in B
-        sampAb=sampA
-        sampAb[:, iParams]=sampB[:, iParams]
+        sampAB=sampA
+        sampAB[:, iParams]=sampB[:, iParams]
         #Define sampBa to be B with the ith parameter in A
-        sampBa=sampB
-        sampBa[:, iParams]=sampA[:, iParams]
+        sampBA=sampB
+        sampBA[:, iParams]=sampA[:, iParams]
         #Calculate QOI sample matrices
-        fAb[:,iParams]=evalFcn(sampAb)
-        fBa[:,iParams]=evalFcn(sampBa)
+        print(evalFcn(sampAB))
+        fAB[:,iParams]=evalFcn(sampAB)
+        fBA[:,iParams]=evalFcn(sampBA)
     #Expected QOI value
     fCexpected=mean(evalFcn(sampC))
     #QOI value variance
@@ -190,19 +165,20 @@ def GetSobol(model,sobolOptions):
 
 
     #Calculate 1st order parameter effects
-    sobolResults.sobolBase=1/(nSamp*np.sum(fA*fBa-fA*fB,axis=0))/sobolDen
+    sobolResults.base=1/(nSamp*np.sum(fA*fBa-fA*fB,axis=0))/sobolDen
 
     #Caclulate 2nd order parameter effects
-    sobolResults.Tot=1/(2*nSamp)*np.sum(fA-fAb,axis=0)/sobolDen
+    sobolResults.total=1/(2*nSamp)*np.sum(fA-fAb,axis=0)/sobolDen
     return sobolResults
 
-def GetSampDist(model, options):
+def GetSampDist(model, sampOptions):
     # Determine Sample Function
     if sampOptions.dist.lower() == 'norm':  # Normal Distribution
-        sampDist = lambda nSamp: np.arndom.randn(nSamp,model.nPOIs)*np.sqrt(np.diag(model.var))+model.basePOIs
+        sampDist = lambda nSamp: np.random.randn(nSamp,model.nPOIs)*np.sqrt(np.diag(model.cov))+model.basePOIs
     else:
         raise Exception("Invalid value for options.samp.dist")  # Raise Exception if invalide distribution is entered
-    return sampDist
+    model.sampDist=sampDist
+    return model
 #
 #
 # def PlotGSA(evalMat, sampleMat):

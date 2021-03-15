@@ -5,44 +5,34 @@
 
 # Import modules
 import numpy as np
-import SensitivityAnalysis as uq
-
-# Companion Functions
-def linear_function(x, params):
-    return params[0] + x * params[1]
-
-def quadratic_function(x, params):
-    return params[0] + x * params[1] + x*params[2]
+import UQtoolbox as uq
+import UQtoolbox_examples as uqExamples
 
 # Main Script
 
 
 # Define assessing points and parameters
-evalPoints = np.array([0, .5, 1, 2])                                    # Currently requires 1xn or nx1 ordering
 
 
-# Select eval function
-evalFcn= lambda params:quadratic_function(evalPoints,params)            #Quadratic Function
-
-#Select base parameter values
-params=np.array([1, 1, 1])
-
-#Create model object
-model=uq.model(baseParams=params, evalFcn=evalFcn)
+#Get model and options object from Example set
+[model, options]=uqExamples.GetExample('linear')
 
 #Run LSA to get jacobian, RSI, and fisher information matrix
-lsa=uq.LSA(model,h=1e-6,xBase=model.basePOIs)
+lsa=uq.LSA(model, options)
+gsa=uq.GSA(model, options)
 
 #jacobian=uq.GetJacobian(model, h=1e-6, scale=True, xBase=np.array([1, 1, 1]))
 #uq.GSA(params, evalFcn)
 
 
-print("Evaluation Points: " + str(evalPoints))
-print("Base Parameters: " + str(params))
+#print("Evaluation Points: " + str(evalPoints))
+print("Base Parameters: " + str(model.basePOIs))
 print("Base values: " + str(model.baseQOIs))
 print("Jacobian: " + str(lsa.jac))
 print("Scaled Jacobian: " + str(lsa.rsi))
 print("Fisher Matrix: " + str(lsa.fisher))
+print("1st Order Sobol Indices: " + str(gsa.sobol.base))
+print("1st Order Sobol Indices: " + str(gsa.sobol.total))
 
 
 # Estimate Jacobian
