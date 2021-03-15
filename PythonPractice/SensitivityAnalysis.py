@@ -132,7 +132,7 @@ def GSA(model, options):
     #Get Parameter Space Sample
     [evalMat, sampleMat]=ParamSample(sampOptions)
     #Plot Correlations and Distributions
-    PlotGSA(evalMat, sampleMat)
+    #PlotGSA(evalMat, sampleMat)
     #Calculate Sobol Indices
     sobol=GetSobol(evalMat, sampleMat)
     return evalMat, sampleMat, sobol
@@ -152,6 +152,57 @@ def ParamSample(params,sampOptions):
     for iSample in range(0,sampleSize):
         evalMat[iSample,]=evalFcn(sampleMat[iSample,])
     return evalMat, sampleMat
+
+def GetSobol(model,sobolOptions):
+    #GetSobol calculates sobol indices using satelli approximation
+    #Inputs: model object (with evalFcn, sampDist, and nParams)
+    #        sobolOptions obejct
+    #Load options and data
+    nSamp=sobolOptions.nSamp
+    sampDist=model.sampDist
+    evalFcn=model.evalFcn
+    #Make Parameter Sample Matrices
+    aSamp=sampDist(nSamp,1)
+    bSamp=sampDist(nSamp,1)
+    cSamp=numpy.concatenate(aSamp, bSamp)
+    dSamp=sampDist(nSamp,1)
+    #Calculate QOI vectors
+    fA=evalFcn(sampA)
+    fB=evalFcn(sampB)
+    fC=evalFcn(sampC)
+    #Initialize combined QOI sample matrices
+    fAb=np.empty([nSamp, nParams])
+    fBa=fAb.copy()
+    for iParams in range(0,nSamp):
+        #Define sampAb to be A with the ith parameter in B
+        sampAb=sampA
+        sampAb[:, iParams]=sampB[:, iParams]
+        #Define sampBa to be B with the ith parameter in A
+        sampBa=sampB
+        sampBa[:, iParams]=sampA[:, iParams]
+        #Calculate QOI sample matrices
+        fAb[:,iParams]=evalFcn(sampAb)
+        fBa[:,iParams]=evalFcn(sampBa)
+    #Expected QOI value
+    fCexpected=mean(evalFcn(sampC))
+    #QOI value variance
+    sobolDen=1/(2*nSamp)*np.sum(fC^2,axis=0)-fCexpected^2
+
+
+    #Calculate 1st order parameter effects
+    sobolResults.sobolBase=1/(nSamp*np.sum(fA*fBa-fA*fB,axis=0))/sobolDen
+
+    #Caclulate 2nd order parameter effects
+    sobolResults.Tot=1/(2*nSamp)*np.sum(fA-fAb,axis=0)/sobolDen
+    return sobolResults
+
+def GetSampDist(model, options):
+    # Determine Sample Function
+    if sampOptions.dist.lower() == 'norm':  # Normal Distribution
+        sampDist = lambda nSamp: np.arndom.randn(nSamp,model.nPOIs)*np.sqrt(np.diag(model.var))+model.basePOIs
+    else:
+        raise Exception("Invalid value for options.samp.dist")  # Raise Exception if invalide distribution is entered
+    return sampDist
 #
 #
 # def PlotGSA(evalMat, sampleMat):
