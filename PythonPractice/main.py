@@ -14,26 +14,21 @@ import UQtoolbox_examples as uqExamples
 # Define assessing points and parameters
 
 
-#Get model and options object from Example set
-[model, options]=uqExamples.GetExample('linear')
+# Get model and options object from Example set
+# [model, options]=uqExamples.GetExample('linear')
+[model, options] = uqExamples.GetExample('helmholtz')
 
-#Run LSA to get jacobian, RSI, and fisher information matrix
-lsa=uq.LSA(model, options)
-gsa=uq.GSA(model, options)
+# Run UQ package
+results = uq.RunUQ(model, options)
 
-#jacobian=uq.GetJacobian(model, h=1e-6, scale=True, xBase=np.array([1, 1, 1]))
-#uq.GSA(params, evalFcn)
-
-
-#print("Evaluation Points: " + str(evalPoints))
+# print("Evaluation Points: " + str(evalPoints))
 print("Base Parameters: " + str(model.basePOIs))
 print("Base values: " + str(model.baseQOIs))
-print("Jacobian: " + str(lsa.jac))
-print("Scaled Jacobian: " + str(lsa.rsi))
-print("Fisher Matrix: " + str(lsa.fisher))
-print("1st Order Sobol Indices: " + str(gsa.sobol.base))
-print("1st Order Sobol Indices: " + str(gsa.sobol.total))
-
+print("Jacobian: " + str(results.lsa.jac))
+print("Scaled Jacobian: " + str(results.lsa.rsi))
+print("Fisher Matrix: " + str(results.lsa.fisher))
+print("1st Order Sobol Indices: " + str(results.gsa.sobol.base))
+print("1st Order Sobol Indices: " + str(results.gsa.sobol.total))
 
 # Estimate Jacobian
 # h=.01

@@ -40,33 +40,64 @@ class uqOptions:
 class model:
     #Model sets should be initialized with base parameter settings, covariance Matrix, and eval function that
     #   takes in a vector of POIs and outputs a vector of QOIs
-    def __init__(self,baseParams=np.empty, covMat=np.empty, evalFcn=np.empty):
-        self.basePOIs=baseParams
+    def __init__(self,basePOIs=np.empty, covMat=np.empty, evalFcn=np.empty):
+        self.basePOIs=basePOIs
         self.cov=covMat
         self.evalFcn=evalFcn
-        self.baseQOIs=evalFcn(baseParams)
+        self.baseQOIs=evalFcn(basePOIs)
         self.sampDist='null'
         self.nPOIs=len(self.basePOIs)
         self.nQOIs=len(self.baseQOIs)
     pass
 
 # Define class "lsa", this will be the used to collect relative sensitivity analysis outputs
-class lsa:
+class lsaResults:
     #
-    def __init__(self,jacobian=np.empty, rsi=np.empty, fisherMat=np.empty):
+    def __init__(self,jacobian=np.empty, rsi=np.empty, fisher=np.empty):
         self.jac=jacobian
         self.rsi=rsi
-        self.fisher=fisherMat
+        self.fisher=fisher
+    pass
+class gsaResults:
+    #
+    def __init__(self,sobolBase=np.empty, sobolTot=np.empty):
+        self.sobolBase=sobolBase
+        self.sobolTot=sobolTot
     pass
 
-# Local Sensitivity Analysis Functions
+class results:
+    def __init__(self,lsa=lsaResults(), gsa=gsaResults()):
+        self.lsa=lsa
+        self.gsa=gsa
+
+#Main Function
+def RunUQ(model, options):
+    #Run Local Sensitivity Analysis
+    results.lsa = LSA(model, options)
+
+    #Run Global Sensitivity Analysis
+    results.gsa = GSA(model, options)
+
+    #Print Results
+    print("Base Parameters: " + str(model.basePOIs))
+    print("Base values: " + str(model.baseQOIs))
+    print("Jacobian: " + str(lsa.jac))
+    print("Scaled Jacobian: " + str(lsa.rsi))
+    print("Fisher Matrix: " + str(lsa.fisher))
+    print("1st Order Sobol Indices: " + str(gsa.sobol.base))
+    print("2st Order Sobol Indices: " + str(gsa.sobol.total))
+    return results
+
+# Top order functions- These functions are the main functions for each component of our analysis they include,
+# Local Sensitivity Analysis main
 def LSA(model, options):
-    # LSA implements the following local sensitivity analysis methods on system specific by "model" object
+    # LSA implements the following local sensitivity analysis methods on system specified by "model" object
         # 1) Jacobian
         # 2) Scaled Jacobian for Relative Sensitivity Index (RSI)
         # 3) Fisher Information matrix
-    # Required Inputs: object of class "model" and object of class options
+    # Required Inputs: object of class "model" and object of class "options"
     # Outputs: Object of class lsa with Jacobian, RSI, and Fisher information matrix
+
     # Calculate Jacobian
     jacRaw=GetJacobian(model, options.jac, scale=False)
     # Calculate RSI
@@ -75,10 +106,30 @@ def LSA(model, options):
     fisherMat=np.dot(np.transpose(jacRaw), jacRaw)
 
     #Collect Outputs and return as an lsa object
-    return lsa(jacRaw, jacRSI, fisherMat)
+    return lsaResults(jacobian=jacRaw, rsi=jacRSI, fisher=fisherMat)
+
+# Global Sensitivity Analysis main
+def GSA(model, options):
+    #GSA implements the following local sensitivity analysis methods on "model" object
+        # 1) Gets sampling distribution (used only for internal calculations)
+        # 2) Calculates Sobol Indices
+        # 3) Performs Morris Screenings (not yet implemented)
+        # 4) Produces histogram plots for QOI values (not yet implemented)
+    # Required Inputs: Object of class "model" and object of class "options"
+    # Outputs: Object of class gsa with fisher and sobol elements
+
+    #Get Parameter Distributions
+    model=GetSampDist(model, options.samp)
+    #Plot Correlations and Distributions
+    #PlotGSA(evalMat, sampleMat)
+    #Calculate Sobol Indices
+    [sobolBase, sobolTot]=GetSobol(model, options.samp)
+    gsa=gsaResults(sobolBase=sobolBase, sobolTot=sobolTot)
+    return gsaResults
 
 
 
+#LSA Component Functions
 def GetJacobian(model, jacOptions, **kwargs):
     # GetJacobian calculates the Jacobian for n QOIs and p POIs
     # Required Inputs: object of class "model" (.cov element not required)
@@ -116,17 +167,9 @@ def GetJacobian(model, jacOptions, **kwargs):
                                                                             # Scale jacobian for relative sensitivity
         del xPert, yPert, iPOI, jQOI                                        # Clear intermediate variables
     return jac                                                              # Return Jacobian
-#
-# #Global Sensitivity Analysis Functions
-def GSA(model, options):
-    #Get Parameter Distributions
-    model=GetSampDist(model, options.samp)
-    #Plot Correlations and Distributions
-    #PlotGSA(evalMat, sampleMat)
-    #Calculate Sobol Indices
-    gsaResults.sobol=GetSobol(model, options.samp)
-    return gsaResults
 
+
+# GSA Component Functions
 def GetSobol(model,sampOptions):
     #GetSobol calculates sobol indices using satelli approximation
     #Inputs: model object (with evalFcn, sampDist, and nParams)
@@ -165,11 +208,11 @@ def GetSobol(model,sampOptions):
 
 
     #Calculate 1st order parameter effects
-    sobolResults.base=1/(nSamp*np.sum(fA*fBa-fA*fB,axis=0))/sobolDen
+    sobolBase=1/(nSamp*np.sum(fA*fBa-fA*fB,axis=0))/sobolDen
 
     #Caclulate 2nd order parameter effects
-    sobolResults.total=1/(2*nSamp)*np.sum(fA-fAb,axis=0)/sobolDen
-    return sobolResults
+    sobolTot=1/(2*nSamp)*np.sum(fA-fAb,axis=0)/sobolDen
+    return sobolBase, sobolTot
 
 def GetSampDist(model, sampOptions):
     # Determine Sample Function
