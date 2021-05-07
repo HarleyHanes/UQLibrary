@@ -8,27 +8,33 @@
 import numpy as np
 import sys
 #import seaborne as seaborne
+###----------------------------------------------------------------------------------------------
+###-------------------------------------Class Definitions----------------------------------------
+###----------------------------------------------------------------------------------------------
 
-
-#Define class "options", this will be the class used to collect algorithm options for functions
+##--------------------------------------uqOptions--------------------------------------------------
+#Define class "uqOptions", this will be the class used to collect algorithm options for functions
 #   -Subclasses: jacOptions, plotOptions, sampOptions
+#--------------------------------------jacOptions------------------------------------------------
 class jacOptions:
     def __init__(self,xDelta=10^(-6), method='complex', scale='y'):
         self.xDelta=xDelta                        #Input perturbation for calculating jacobian
         self.scale=scale                          #scale can be y, n, or both for outputing scaled, unscaled, or both
         self.method=method                        #method used for caclulating Jacobian NOT CURRENTLY IMPLEMENTED
     pass
-
+#--------------------------------------sampOptions------------------------------------------------
 class sampOptions:
     def __init__(self, nSamp=1000, dist='norm', var=1):
         self.nSamp = nSamp                      #Number of samples to be generated for GSA
         self.dist = dist                        #String identifying sampling distribution for parameters
                                                 #       Supported distributions: normal
         pass
+#--------------------------------------plotOptions------------------------------------------------
 class plotOptions:
     def __init__(self,):
         pass
-
+#--------------------------------------uqOptions------------------------------------------------
+#   Class holding the above options subclasses
 class uqOptions:
     def __init__(self,jac=jacOptions(),plot=plotOptions(),samp=sampOptions()):
         self.jac=jac
@@ -36,6 +42,7 @@ class uqOptions:
         self.samp=samp
     pass
 
+##-------------------------------------model------------------------------------------------------
 #Define class "model", this will be the class used to collect input information for all functions
 class model:
     #Model sets should be initialized with base parameter settings, covariance Matrix, and eval function that
@@ -50,6 +57,8 @@ class model:
         self.nQOIs=len(self.baseQOIs)
     pass
 
+##------------------------------------results-----------------------------------------------------
+#-------------------------------------lsaResults--------------------------------------------------
 # Define class "lsa", this will be the used to collect relative sensitivity analysis outputs
 class lsaResults:
     #
@@ -58,20 +67,37 @@ class lsaResults:
         self.rsi=rsi
         self.fisher=fisher
     pass
+#-------------------------------------gsaResults--------------------------------------------------
+# Define class "gsaResults" which holds sobol analysis results
 class gsaResults:
     #
     def __init__(self,sobolBase=np.empty, sobolTot=np.empty):
         self.sobolBase=sobolBase
         self.sobolTot=sobolTot
     pass
+##------------------------------------results-----------------------------------------------------
+# Define class "results" which holds a gsaResults object and lsaResults object
 
 class results:
     def __init__(self,lsa=lsaResults(), gsa=gsaResults()):
         self.lsa=lsa
         self.gsa=gsa
 
-#Main Function
+
+###----------------------------------------------------------------------------------------------
+###-------------------------------------Main Functions----------------------------------------
+###----------------------------------------------------------------------------------------------
+#   The following functions are the primary functions for running the package. RunUQ runs both local sensitivity
+#   analysis and global sensitivity analysis while printing to command window summary statistics. However, local
+#   sensitivity analysis and global sensitivity analysis can be run independently with LSA and GSA respectively
+
+##--------------------------------------RunUQ-----------------------------------------------------
 def RunUQ(model, options):
+    #RunUQ is the primary call function for UQtoolbox and runs both the local sensitivity analysis and global sensitivity
+    #   analysis while printing summary statistics to the command window.
+    #Inputs: model object, options object
+    #Outpts: results object, a list of summary results is printed to command window
+
     #Run Local Sensitivity Analysis
     results.lsa = LSA(model, options)
 
@@ -81,14 +107,16 @@ def RunUQ(model, options):
     #Print Results
     print("Base Parameters: " + str(model.basePOIs))
     print("Base values: " + str(model.baseQOIs))
-    print("Jacobian: " + str(lsa.jac))
-    print("Scaled Jacobian: " + str(lsa.rsi))
-    print("Fisher Matrix: " + str(lsa.fisher))
-    print("1st Order Sobol Indices: " + str(gsa.sobol.base))
-    print("2st Order Sobol Indices: " + str(gsa.sobol.total))
+    print("Jacobian: " + str(results.lsa.jac))
+    print("Relative Sensitivities: " + str(results.lsa.rsi))
+    print("Fisher Matrix: " + str(results.lsa.fisher))
+    print("1st Order Sobol Indices: " + str(results.gsa.sobolBase))
+    print("2st Order Sobol Indices: " + str(results.gsa.sobolTot))
     return results
 
 # Top order functions- These functions are the main functions for each component of our analysis they include,
+
+##--------------------------------------LSA-----------------------------------------------------
 # Local Sensitivity Analysis main
 def LSA(model, options):
     # LSA implements the following local sensitivity analysis methods on system specified by "model" object
@@ -100,15 +128,16 @@ def LSA(model, options):
 
     # Calculate Jacobian
     jacRaw=GetJacobian(model, options.jac, scale=False)
-    # Calculate RSI
+    # Calculate relative sensitivity index (RSI)
     jacRSI=GetJacobian(model, options.jac, scale=True)
-    # Calculate Fisher Information Matrix
+    # Calculate Fisher Information Matrix from jacobian
     fisherMat=np.dot(np.transpose(jacRaw), jacRaw)
 
     #Collect Outputs and return as an lsa object
     return lsaResults(jacobian=jacRaw, rsi=jacRSI, fisher=fisherMat)
 
-# Global Sensitivity Analysis main
+
+##--------------------------------------GSA-----------------------------------------------------
 def GSA(model, options):
     #GSA implements the following local sensitivity analysis methods on "model" object
         # 1) Gets sampling distribution (used only for internal calculations)
@@ -124,12 +153,13 @@ def GSA(model, options):
     #PlotGSA(evalMat, sampleMat)
     #Calculate Sobol Indices
     [sobolBase, sobolTot]=GetSobol(model, options.samp)
-    gsa=gsaResults(sobolBase=sobolBase, sobolTot=sobolTot)
-    return gsaResults
+    return gsaResults(sobolBase=sobolBase, sobolTot=sobolTot)
 
+###----------------------------------------------------------------------------------------------
+###-------------------------------------Support Functions----------------------------------------
+###----------------------------------------------------------------------------------------------
 
-
-#LSA Component Functions
+##--------------------------------------GetJacobian-----------------------------------------------------
 def GetJacobian(model, jacOptions, **kwargs):
     # GetJacobian calculates the Jacobian for n QOIs and p POIs
     # Required Inputs: object of class "model" (.cov element not required)
@@ -147,7 +177,7 @@ def GetJacobian(model, jacOptions, **kwargs):
     xBase=model.basePOIs
     xDelta=jacOptions.xDelta
 
-    #Initializae other parameters
+    #Initialize base QOI value, the number of POIs, and number of QOIs
     yBase=model.evalFcn(xBase)                                              # Get base QOI values
     nPOIs = model.nPOIs                                                     # Get number of parameters (nPOIs)
     nQOIs = model.nQOIs                                                     # Get number of outputs (nQOIs)
@@ -169,51 +199,62 @@ def GetJacobian(model, jacOptions, **kwargs):
     return jac                                                              # Return Jacobian
 
 
+##--------------------------------------GetSobol----------------------------------------------------
 # GSA Component Functions
 def GetSobol(model,sampOptions):
-    #GetSobol calculates sobol indices using satelli approximation
+    #GetSobol calculates sobol indices using satelli approximation method
     #Inputs: model object (with evalFcn, sampDist, and nParams)
-    #        sobolOptions obejct
+    #        sobolOptions object
     #Load options and data
     nSamp=sampOptions.nSamp
     sampDist=model.sampDist
     evalFcn=model.evalFcn
-    #Make Parameter Sample Matrices
+    #Make 3 POI sample matrices with nSamp samples each and concatenate the first two
     sampA=sampDist(nSamp)
     sampB=sampDist(nSamp)
+    sampD=sampDist(nSamp)     #THIS CURRENTLY UNUSED, CHECK IF BUG
     sampC=np.concatenate((sampA, sampB))
-    sampD=sampDist(nSamp)
-    #Calculate QOI vectors
-    fA=evalFcn(sampA)
-    fB=evalFcn(sampB)
-    fC=evalFcn(sampC)
+    #Calculate matrices of QOI values for each POI sample matrix
+    fA=evalFcn(sampA)                                                   #nSamp x nQOI out matrix from A
+    fB=evalFcn(sampB)                                                   #nSamp x nQOI out matrix from B
+    fC=np.concatenate((fA, fB))                                         #CONFIRM THIS VALID INSTEAD OF RECALCULATING FROM sampC
     #Initialize combined QOI sample matrices
-    fAB=np.empty([nSamp, model.nPOIs])
-    fBA=fAB.copy()
-    for iParams in range(0,nSamp):
+    fAb=np.empty([nSamp, model.nQOIs, model.nPOIs])
+    fBa=fAb.copy()
+    for iParams in range(0,model.nPOIs):
         #Define sampAb to be A with the ith parameter in B
-        sampAB=sampA
-        sampAB[:, iParams]=sampB[:, iParams]
+        sampAb=sampA
+        sampAb[:, iParams]=sampB[:, iParams]
         #Define sampBa to be B with the ith parameter in A
-        sampBA=sampB
-        sampBA[:, iParams]=sampA[:, iParams]
-        #Calculate QOI sample matrices
-        print(evalFcn(sampAB))
-        fAB[:,iParams]=evalFcn(sampAB)
-        fBA[:,iParams]=evalFcn(sampBA)
+        sampBa=sampB
+        sampBa[:, iParams]=sampA[:, iParams]                        #nSamp x nPOI matrix
+        #Calculate QOI values for each combined sample matrix
+        print(sampAb)
+        print(evalFcn(sampAb))
+        fAb[:,:,iParams]=evalFcn(sampAb)                              #nSamp x nQOI x nPOI tensor
+        fBa[:,:,iParams]=evalFcn(sampBa)                              #nSamp x nQOI x nPOI tensor
     #Expected QOI value
-    fCexpected=mean(evalFcn(sampC))
+    fCexpected=np.mean(evalFcn(sampC),axis=0)                       #1 x nQOI vector of average of evalFcn over C param
+                                                                    #    sample at n QOIs
     #QOI value variance
-    sobolDen=1/(2*nSamp)*np.sum(fC^2,axis=0)-fCexpected^2
+    sobolDen=1/(2*nSamp)*np.sum(fC**2,axis=0)-fCexpected**2           #Check correct syntax on ^2
 
 
+    # Check correct formula, double divide looks wrong
+    # Should be able to remove for loops, just check how products of tensors work
     #Calculate 1st order parameter effects
-    sobolBase=1/(nSamp*np.sum(fA*fBa-fA*fB,axis=0))/sobolDen
+    sobolBase=np.empty((model.nPOIs,model.nQOIs))
+    for iPOI in range(0,model.nPOIs):
+        sobolBase[iPOI,:]=1/(nSamp*np.sum(fA*fBa[:,:,iPOI]-fA*fB,axis=0))/sobolDen
+                #Check correct formula, double divide looks wrong
 
     #Caclulate 2nd order parameter effects
-    sobolTot=1/(2*nSamp)*np.sum(fA-fAb,axis=0)/sobolDen
+    sobolTot=np.empty((model.nPOIs,model.nQOIs))
+    for iPOI in range(0,model.nPOIs):
+        sobolTot[iPOI,:]=1/(2*nSamp)*np.sum(fA-fAb[:,:,iPOI],axis=0)/sobolDen
     return sobolBase, sobolTot
 
+##--------------------------------------GetSampDist----------------------------------------------------
 def GetSampDist(model, sampOptions):
     # Determine Sample Function
     if sampOptions.dist.lower() == 'norm':  # Normal Distribution

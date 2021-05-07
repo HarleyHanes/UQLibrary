@@ -4,7 +4,7 @@
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
 # Import modules
-import numpy as np
+# import numpy as np
 import UQtoolbox as uq
 import UQtoolbox_examples as uqExamples
 
@@ -16,19 +16,19 @@ import UQtoolbox_examples as uqExamples
 
 # Get model and options object from Example set
 # [model, options]=uqExamples.GetExample('linear')
-[model, options] = uqExamples.GetExample('helmholtz')
+[model, options] = uqExamples.GetExample('linear')
 
 # Run UQ package
 results = uq.RunUQ(model, options)
 
 # print("Evaluation Points: " + str(evalPoints))
-print("Base Parameters: " + str(model.basePOIs))
-print("Base values: " + str(model.baseQOIs))
-print("Jacobian: " + str(results.lsa.jac))
-print("Scaled Jacobian: " + str(results.lsa.rsi))
-print("Fisher Matrix: " + str(results.lsa.fisher))
-print("1st Order Sobol Indices: " + str(results.gsa.sobol.base))
-print("1st Order Sobol Indices: " + str(results.gsa.sobol.total))
+# print("Base Parameters: " + str(model.basePOIs))
+# print("Base values: " + str(model.baseQOIs))
+# print("Jacobian: " + str(results.lsa.jac))
+# print("Scaled Jacobian: " + str(results.lsa.rsi))
+# print("Fisher Matrix: " + str(results.lsa.fisher))
+# print("1st Order Sobol Indices: " + str(results.gsa.sobolBase))
+# print("1st Order Sobol Indices: " + str(results.gsa.sobolTot))
 
 # Estimate Jacobian
 # h=.01
@@ -47,4 +47,4 @@ print("1st Order Sobol Indices: " + str(results.gsa.sobol.total))
 #
 # print("Jacobian: " + str(Jac))
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+# See PyCharm help at https://www.jetbrains.com/help/pycha
