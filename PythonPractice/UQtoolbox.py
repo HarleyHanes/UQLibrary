@@ -212,46 +212,44 @@ def GetSobol(model,sampOptions):
     #Make 3 POI sample matrices with nSamp samples each and concatenate the first two
     sampA=sampDist(nSamp)
     sampB=sampDist(nSamp)
-    sampD=sampDist(nSamp)     #THIS CURRENTLY UNUSED, CHECK IF BUG
-    sampC=np.concatenate((sampA, sampB))
+    #sampC=sampDist(nSamp)
+    sampD=np.concatenate((sampA, sampB))
     #Calculate matrices of QOI values for each POI sample matrix
     fA=evalFcn(sampA)                                                   #nSamp x nQOI out matrix from A
     fB=evalFcn(sampB)                                                   #nSamp x nQOI out matrix from B
-    fC=np.concatenate((fA, fB))                                         #CONFIRM THIS VALID INSTEAD OF RECALCULATING FROM sampC
+    fD=np.concatenate((fA, fB))                                         #CONFIRM THIS VALID INSTEAD OF RECALCULATING FROM sampC
     #Initialize combined QOI sample matrices
-    fAb=np.empty([nSamp, model.nQOIs, model.nPOIs])
-    fBa=fAb.copy()
+    fC=np.empty([nSamp, model.nPOIs, model.nQOIs])
+    #fBa=fAb.copy()
     for iParams in range(0,model.nPOIs):
         #Define sampAb to be A with the ith parameter in B
-        sampAb=sampA
-        sampAb[:, iParams]=sampB[:, iParams]
+        sampC=sampA
+        sampC[:, iParams]=sampB[:, iParams]
         #Define sampBa to be B with the ith parameter in A
-        sampBa=sampB
-        sampBa[:, iParams]=sampA[:, iParams]                        #nSamp x nPOI matrix
+        # sampBa=sampB
+        # sampBa[:, iParams]=sampA[:, iParams]                        #nSamp x nPOI matrix
         #Calculate QOI values for each combined sample matrix
-        print(sampAb)
-        print(evalFcn(sampAb))
-        fAb[:,:,iParams]=evalFcn(sampAb)                              #nSamp x nQOI x nPOI tensor
-        fBa[:,:,iParams]=evalFcn(sampBa)                              #nSamp x nQOI x nPOI tensor
+        fC[:,iParams,:]=evalFcn(sampC)                            #nSamp x nPOI x nQOI tensor
     #Expected QOI value
-    fCexpected=np.mean(evalFcn(sampC),axis=0)                       #1 x nQOI vector of average of evalFcn over C param
+    fDexpected=np.mean(evalFcn(sampD),axis=0)                       #1 x nQOI vector of average of evalFcn over C param
                                                                     #    sample at n QOIs
     #QOI value variance
-    sobolDen=1/(2*nSamp)*np.sum(fC**2,axis=0)-fCexpected**2           #Check correct syntax on ^2
+    fDvar=1/(2*nSamp)*np.sum(fD**2,axis=0)-fDexpected**2           #Check correct syntax on ^2
+    print(fDvar)
 
 
     # Check correct formula, double divide looks wrong
     # Should be able to remove for loops, just check how products of tensors work
-    #Calculate 1st order parameter effects
-    sobolBase=np.empty((model.nPOIs,model.nQOIs))
-    for iPOI in range(0,model.nPOIs):
-        sobolBase[iPOI,:]=1/(nSamp*np.sum(fA*fBa[:,:,iPOI]-fA*fB,axis=0))/sobolDen
-                #Check correct formula, double divide looks wrong
 
-    #Caclulate 2nd order parameter effects
-    sobolTot=np.empty((model.nPOIs,model.nQOIs))
-    for iPOI in range(0,model.nPOIs):
-        sobolTot[iPOI,:]=1/(2*nSamp)*np.sum(fA-fAb[:,:,iPOI],axis=0)/sobolDen
+    sobolBase=np.empty((model.nQOIs,model.nPOIs))
+    sobolTot=np.empty((model.nQOIs,model.nPOIs))
+    for iQOI in range(0,model.nQOIs):
+        #Calculate intermediate vectors
+        fAmat=(fA[:, iQOI] * np.ones((1, nSamp))).transpose()
+        #Calculate 1st order parameter effects
+        sobolBase[iQOI,:]=1/(nSamp)*(np.sum(fC[:,:,iQOI]*fAmat,axis=0)-np.sum(fA[:,iQOI]*fB[:,iQOI],axis=0))/fDvar[iQOI]
+        #Caclulate 2nd order parameter effects
+        sobolTot[iQOI,:]=1/(2*nSamp)*(np.sum(fA[:,iQOI]**2,axis=0)-2*np.sum(fAmat*fC[:,:,iQOI],axis=0)+np.sum(fC[:,:,iQOI]**2,axis=0))/fDvar[iQOI]
     return sobolBase, sobolTot
 
 ##--------------------------------------GetSampDist----------------------------------------------------

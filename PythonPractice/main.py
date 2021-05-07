@@ -21,15 +21,6 @@ import UQtoolbox_examples as uqExamples
 # Run UQ package
 results = uq.RunUQ(model, options)
 
-# print("Evaluation Points: " + str(evalPoints))
-# print("Base Parameters: " + str(model.basePOIs))
-# print("Base values: " + str(model.baseQOIs))
-# print("Jacobian: " + str(results.lsa.jac))
-# print("Scaled Jacobian: " + str(results.lsa.rsi))
-# print("Fisher Matrix: " + str(results.lsa.fisher))
-# print("1st Order Sobol Indices: " + str(results.gsa.sobolBase))
-# print("1st Order Sobol Indices: " + str(results.gsa.sobolTot))
-
 # Estimate Jacobian
 # h=.01
 # xEval=x

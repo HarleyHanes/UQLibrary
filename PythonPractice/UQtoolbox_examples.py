@@ -30,7 +30,7 @@ def GetExample(example, **kwargs):
         sampOptions = uq.sampOptions(nSamp=100)  # Keep normal sampling but reduce sample size to 100
         plotOptions = uq.plotOptions()  # Load base plot options
     elif example.lower() == 'helmholtz':
-        baseEvalPoints = np.transpose(np.arange(0, 1, .02))
+        baseEvalPoints = np.arange(0, 1, .02)
         print(baseEvalPoints)
         model = uq.model(evalFcn=lambda params: HelmholtzEnergy(baseEvalPoints, params),
                          basePOIs=np.array([-392.66, 770.1, 57.61]),
@@ -38,8 +38,18 @@ def GetExample(example, **kwargs):
                                           [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
                                           [0.4021, -2.4078, 3.0493]]) * (10 ** 3))
         jacOptions = uq.jacOptions()  # Load base jacobian setttings
-        sampOptions = uq.sampOptions(nSamp=100)  # Keep normal sampling but reduce sample size to 100
+        sampOptions = uq.sampOptions(nSamp=10000)  # Keep normal sampling but reduce sample size to 100
         plotOptions = uq.plotOptions()  # Load base plot options
+    elif example.lower()== 'integrated helmholtz'
+        baseEvalPoints=.8
+        model = uq.model(evalFcn=lambda params: IntegratedHelmholtzEnergy(baseEvalPoints,params),
+                         basePOIs=np.array([-392.66, 770.1, 57.61]),
+                         covMat=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
+                                          [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
+                                          [0.4021, -2.4078, 3.0493]]) * (10 ** 3))
+        sampOptions = uq.sampOptions(nSamp=10000)  # Keep normal sampling but reduce sample size to 100
+        plotOptions = uq.plotOptions()  # Load base plot options
+
     else:
         raise Exception("Unrecognized Example Type")
 
@@ -73,5 +83,5 @@ def HelmholtzEnergy(x, params):
     if params.ndim == 1:
         return params[0] * (x ** 2) + params[1] * (x ** 4) + params[2] * (x ** 6)
     elif params.ndim == 2:
-        return params[:, 0] * (x.transpose() ** 2) + params[:, 1] * (x.transpose() ** 4) + params[:, 2] * (x**6)
+        return params[:, 0] * (x ** 2) + params[:, 1] * (x ** 4) + params[:, 2] * (x**6)
            
