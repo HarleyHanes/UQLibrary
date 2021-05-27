@@ -20,14 +20,14 @@ def GetExample(example, **kwargs):
         model = uq.model(evalFcn=lambda params: linear_function(baseEvalPoints, params),
                          basePOIs=np.array([1, 1]),
                          covMat=np.array([[1, 0], [0, 1]]))
-        options.sampOptions = uq.sampOptions(nSamp=100)  # Keep normal sampling but reduce sample
+        options.samp = uq.samp(nSamp=100)  # Keep normal sampling but reduce sample
         # size to 100
     elif example.lower() == 'quadratic':
         baseEvalPoints = np.array([[0], [.5], [1], [2]])  # Currently requires 1xn or nx1 ordering
         model = uq.model(evalFcn=lambda params: quadratic_function(baseEvalPoints, params),
                          basePOIs=np.array([1, 1, 1]),
                          covMat=np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
-        options.sampOptions = uq.sampOptions(nSamp=100)  # Keep normal sampling but reduce sample size to 100
+        options.samp = uq.samp(nSamp=100)  # Keep normal sampling but reduce sample size to 100
     elif example.lower() == 'helmholtz':
         baseEvalPoints = np.arange(0, 1, .02)
         model = uq.model(evalFcn=lambda params: HelmholtzEnergy(baseEvalPoints, params),
@@ -35,16 +35,20 @@ def GetExample(example, **kwargs):
                          covMat=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
                                           [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
                                           [0.4021, -2.4078, 3.0493]]) * (10 ** 3))
-        options.sampOptions = uq.sampOptions(nSamp=10000)  # Keep normal sampling but reduce sample size to 100
-    elif example.lower()== 'integrated helmholtz':
+        options.samp = uq.sampOptions(nSamp=10000)  # Keep normal sampling but reduce sample size to 100
+    elif example.lower() == 'integrated helmholtz':
         baseEvalPoints= np.array([.8])
         model = uq.model(evalFcn=lambda params: IntegratedHelmholtzEnergy(baseEvalPoints,params),
                          basePOIs=np.array([-389.4, 761.3, 61.5]),
                          covMat=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
                                           [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
                                           [0.4021, -2.4078, 3.0493]]) * (10 ** 3))
-        options.sampOptions = uq.sampOptions(dist="unif",distParms=np.array([[.8,.8,.8],[1.2,1.2,1.2]])*model.basePOIs)
+        options.samp = uq.sampOptions(dist='unif', distParms=np.array([[.8,.8,.8],[1.2,1.2,1.2]])*model.basePOIs)
                                                 # Use uniform sampling of +-20% nominal value
+    elif example.lower() == 'linear product': #Linear product example taken from Homma1996
+        model=uq.model(evalFcn=lambda params: LinearProd(params),
+                       basePOIs=np.array([.5, .5, .5, .5, .5]))
+        options.samp = uq.sampOptions(dist="unif", distParms=np.array([[0, 0, 0, 0, 0], [1, 1, 1, 1, 1]]))
     else:
         raise Exception("Unrecognized Example Type")
 
@@ -53,6 +57,7 @@ def GetExample(example, **kwargs):
         model.basePOIs = kwargs['basePOI']
     if 'evalPoints' in kwargs:  # Determine eval points
         model.evalPoints = kwargs['evalPoints']
+
 
     return model, options
 
@@ -81,5 +86,11 @@ def IntegratedHelmholtzEnergy(x,params):
         return params[0] * (x ** 3)/3 + params[1] * (x ** 5)/5 + params[2] * (x ** 7)/7
     elif params.ndim == 2:
         return params[:, 0] * (x ** 3)/3 + params[:, 1] * (x ** 5)/5 + params[:, 2] * (x**7)/7
+def LinearProd(params):
+    if params.ndim == 1:
+        return np.array([np.prod(2 * params + 1) / (2 ** (len(np.transpose(params))))])
+    elif params.ndim == 2:
+        return np.prod(2*params+1, axis=1)/(2**(len(np.transpose(params))))
+
 
            

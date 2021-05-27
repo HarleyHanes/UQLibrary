@@ -15,7 +15,9 @@ import UQtoolbox_examples as uqExamples
 
 
 # Get model and options object from Example set
-[model, options] = uqExamples.GetExample('integrated helmholtz')
+#[model, options] = uqExamples.GetExample('integrated helmholtz')
+
+[model, options] = uqExamples.GetExample('linear product')
 
 # Run UQ package
 results = uq.RunUQ(model, options)

@@ -27,7 +27,7 @@ class sampOptions:
     def __init__(self, nSamp=10000, dist='norm', distParms=(0,1)):
         self.nSamp = nSamp                      #Number of samples to be generated for GSA
         self.dist = dist                        #String identifying sampling distribution for parameters
-                                                #       Supported distributions: normal
+                                                #       Supported distributions: unif, normal, exponential, beta, inverseCDF
         self.distParms=distParms
         pass
 #--------------------------------------plotOptions------------------------------------------------
@@ -98,7 +98,8 @@ def RunUQ(model, options):
     #   analysis while printing summary statistics to the command window.
     #Inputs: model object, options object
     #Outpts: results object, a list of summary results is printed to command window
-
+    #Set seed for reporducibility
+    np.random.seed(10)
     #Run Local Sensitivity Analysis
     results.lsa = LSA(model, options)
 
@@ -112,7 +113,7 @@ def RunUQ(model, options):
     print("Relative Sensitivities: " + str(results.lsa.rsi))
     print("Fisher Matrix: " + str(results.lsa.fisher))
     print("1st Order Sobol Indices: " + str(results.gsa.sobolBase))
-    print("2st Order Sobol Indices: " + str(results.gsa.sobolTot))
+    print("Total Sobol Indices: " + str(results.gsa.sobolTot))
     return results
 
 # Top order functions- These functions are the main functions for each component of our analysis they include,
@@ -147,7 +148,6 @@ def GSA(model, options):
         # 4) Produces histogram plots for QOI values (not yet implemented)
     # Required Inputs: Object of class "model" and object of class "options"
     # Outputs: Object of class gsa with fisher and sobol elements
-
     #Get Parameter Distributions
     model=GetSampDist(model, options.samp)
     #Plot Correlations and Distributions
@@ -221,37 +221,42 @@ def GetSobol(model,sampOptions):
     fD=np.concatenate((fA, fB),axis=0)
     #Initialize combined QOI sample matrices
     if model.nQOIs==1:
-        fC=np.empty([nSamp,model.nPOIs])
+        fAB=np.empty([nSamp,model.nPOIs])
     else:
-        fC=np.empty([nSamp, model.nPOIs, model.nQOIs])
+        fAB=np.empty([nSamp, model.nPOIs, model.nQOIs])
     for iParams in range(0,model.nPOIs):
         #Define sampC to be A with the ith parameter in B
-        sampC=sampA
-        sampC[:, iParams]=sampB[:, iParams]
+        sampAB=sampA
+        sampAB[:, iParams]=sampB[:, iParams]
         if model.nQOIs==1:
-            fC[:,iParams]=evalFcn(sampC)
+            fAB[:,iParams]=evalFcn(sampAB)
         else:
-            fC[:,iParams,:]=evalFcn(sampC)                           #nSamp x nPOI x nQOI tensor
+            fAB[:,iParams,:]=evalFcn(sampAB)                           #nSamp x nPOI x nQOI tensor
     #QOI variance
-    fDvar=np.sum(fD**2)/(2*nSamp)-(np.sum(fD,axis=0)/(2*nSamp))**2
+    fDvar=np.var(fD)
+    #fDvar=np.sum(fD**2)/(2*nSamp)-(np.sum(fD,axis=0)/(2*nSamp))**2
 
 
     sobolBase=np.empty((model.nQOIs,model.nPOIs))
     sobolTot=np.empty((model.nQOIs,model.nPOIs))
     if model.nQOIs==1:
         #Calculate 1st order parameter effects
-        sobolBase=(np.sum(fC*fB,axis=0)-np.sum(fA*fB))/(nSamp*fDvar)
+        sobolBase=np.mean((fAB-fA)*fB, axis=0)/fDvar
         #Caclulate 2nd order parameter effects
-        sobolTot=(np.sum(fA**2)-2*np.sum(fA*fC,axis=0)+np.sum(fC**2,axis=0))/(nSamp*fDvar)
+        sobolTot=np.mean((fA-fAB)**2,axis=0)/fDvar
 
         #sobolTot=(np.dot(fA.transpose(),fA)-2*np.dot(fA.transpose(),fC)+np.dot(fC.transpose(),fC))/(fDvar*2*nSamp)
     else:
         for iQOI in range(0,model.nQOIs):
             #Calculate 1st order parameter effects
-            sobolBase[iQOI,:]=1/(nSamp)*(np.sum(fC[:,:,iQOI]*fA[:, [iQOI]],axis=0)-np.sum(fA[:,iQOI]*fB[:,iQOI],axis=0))/(nSamp*fDvar[iQOI])
+            sobolBase[iQOI,:]=1/(nSamp)*(np.sum(fAB[:,:,iQOI]*fA[:, [iQOI]],axis=0)-np.sum(fA[:,iQOI]*fB[:,iQOI],axis=0))/(nSamp*fDvar[iQOI])
             #Caclulate 2nd order parameter effects
-            sobolTot[iQOI,:]=(np.sum(fA[:,iQOI]**2,axis=0)-2*np.sum(fA[:, [iQOI]]*fC[:,:,iQOI],axis=0)\
-                                          +np.sum(fC[:,:,iQOI]**2,axis=0))/(2*nSamp*fDvar[iQOI])
+            sobolTot[iQOI,:]=(np.sum(fA[:,iQOI]**2,axis=0)-2*np.sum(fA[:, [iQOI]]*fAB[:,:,iQOI],axis=0)\
+                                          +np.sum(fAB[:,:,iQOI]**2,axis=0))/(2*nSamp*fDvar[iQOI])
+    print(fDvar)
+    print(sobolBase)
+    print(sobolTot)
+
     return sobolBase, sobolTot
 
 ##--------------------------------------GetSampDist----------------------------------------------------
@@ -267,7 +272,7 @@ def GetSampDist(model, sampOptions):
     elif sampOptions.dist.lower() == 'beta': # beta distribution
         sampDist = lambda nSamp:np.random.beta(distParms[[0],:], distParms[[1],:],size=(nSamp,model.nPOIs))
     elif sampOptions.dist.lower() == 'InverseCDF': #Arbitrary distribution given by inverse cdf
-        sampDist=lambda nSamp: distParms(np.random.rand(nsamp,model.nPOIs))
+        sampDist = lambda nSamp: distParms(np.random.rand(nsamp,model.nPOIs))
     else:
         raise Exception("Invalid value for options.samp.dist. Supported distributions are normal, uniform, exponential, beta, \
         and InverseCDF")  # Raise Exception if invalide distribution is entered
