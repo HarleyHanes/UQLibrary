@@ -20,14 +20,15 @@ class jacOptions:
     def __init__(self,xDelta=10^(-6), method='complex', scale='y'):
         self.xDelta=xDelta                        #Input perturbation for calculating jacobian
         self.scale=scale                          #scale can be y, n, or both for outputing scaled, unscaled, or both
-        self.method=method                        #method used for caclulating Jacobian NOT CURRENTLY IMPLEMENTED
+        self.method=method                        #method used for approximating derivatives
     pass
 #--------------------------------------sampOptions------------------------------------------------
 class sampOptions:
-    def __init__(self, nSamp=1000, dist='norm', var=1):
+    def __init__(self, nSamp=10000, dist='norm', distParms=(0,1)):
         self.nSamp = nSamp                      #Number of samples to be generated for GSA
         self.dist = dist                        #String identifying sampling distribution for parameters
                                                 #       Supported distributions: normal
+        self.distParms=distParms
         pass
 #--------------------------------------plotOptions------------------------------------------------
 class plotOptions:
@@ -209,56 +210,67 @@ def GetSobol(model,sampOptions):
     nSamp=sampOptions.nSamp
     sampDist=model.sampDist
     evalFcn=model.evalFcn
-    #Make 3 POI sample matrices with nSamp samples each and concatenate the first two
+    #Make 2 POI sample matrices with nSamp samples each and then combine the first two
     sampA=sampDist(nSamp)
     sampB=sampDist(nSamp)
     #sampC=sampDist(nSamp)
-    sampD=np.concatenate((sampA, sampB))
+    sampD=np.concatenate((sampA, sampB),axis=0)
     #Calculate matrices of QOI values for each POI sample matrix
-    fA=evalFcn(sampA)                                                   #nSamp x nQOI out matrix from A
-    fB=evalFcn(sampB)                                                   #nSamp x nQOI out matrix from B
-    fD=np.concatenate((fA, fB))                                         #CONFIRM THIS VALID INSTEAD OF RECALCULATING FROM sampC
+    fA=evalFcn(sampA).reshape([nSamp,model.nQOIs])                      #nSamp x nQOI out matrix from A
+    fB=evalFcn(sampB).reshape([nSamp,model.nQOIs])                      #nSamp x nQOI out matrix from B
+    fD=np.concatenate((fA, fB),axis=0)
     #Initialize combined QOI sample matrices
-    fC=np.empty([nSamp, model.nPOIs, model.nQOIs])
-    #fBa=fAb.copy()
+    if model.nQOIs==1:
+        fC=np.empty([nSamp,model.nPOIs])
+    else:
+        fC=np.empty([nSamp, model.nPOIs, model.nQOIs])
     for iParams in range(0,model.nPOIs):
-        #Define sampAb to be A with the ith parameter in B
+        #Define sampC to be A with the ith parameter in B
         sampC=sampA
         sampC[:, iParams]=sampB[:, iParams]
-        #Define sampBa to be B with the ith parameter in A
-        # sampBa=sampB
-        # sampBa[:, iParams]=sampA[:, iParams]                        #nSamp x nPOI matrix
-        #Calculate QOI values for each combined sample matrix
-        fC[:,iParams,:]=evalFcn(sampC)                            #nSamp x nPOI x nQOI tensor
-    #Expected QOI value
-    fDexpected=np.mean(evalFcn(sampD),axis=0)                       #1 x nQOI vector of average of evalFcn over C param
-                                                                    #    sample at n QOIs
-    #QOI value variance
-    fDvar=1/(2*nSamp)*np.sum(fD**2,axis=0)-fDexpected**2           #Check correct syntax on ^2
-    print(fDvar)
+        if model.nQOIs==1:
+            fC[:,iParams]=evalFcn(sampC)
+        else:
+            fC[:,iParams,:]=evalFcn(sampC)                           #nSamp x nPOI x nQOI tensor
+    #QOI variance
+    fDvar=np.sum(fD**2)/(2*nSamp)-(np.sum(fD,axis=0)/(2*nSamp))**2
 
-
-    # Check correct formula, double divide looks wrong
-    # Should be able to remove for loops, just check how products of tensors work
 
     sobolBase=np.empty((model.nQOIs,model.nPOIs))
     sobolTot=np.empty((model.nQOIs,model.nPOIs))
-    for iQOI in range(0,model.nQOIs):
-        #Calculate intermediate vectors
-        fAmat=(fA[:, iQOI] * np.ones((1, nSamp))).transpose()
+    if model.nQOIs==1:
         #Calculate 1st order parameter effects
-        sobolBase[iQOI,:]=1/(nSamp)*(np.sum(fC[:,:,iQOI]*fAmat,axis=0)-np.sum(fA[:,iQOI]*fB[:,iQOI],axis=0))/fDvar[iQOI]
+        sobolBase=(np.sum(fC*fB,axis=0)-np.sum(fA*fB))/(nSamp*fDvar)
         #Caclulate 2nd order parameter effects
-        sobolTot[iQOI,:]=1/(2*nSamp)*(np.sum(fA[:,iQOI]**2,axis=0)-2*np.sum(fAmat*fC[:,:,iQOI],axis=0)+np.sum(fC[:,:,iQOI]**2,axis=0))/fDvar[iQOI]
+        sobolTot=(np.sum(fA**2)-2*np.sum(fA*fC,axis=0)+np.sum(fC**2,axis=0))/(nSamp*fDvar)
+
+        #sobolTot=(np.dot(fA.transpose(),fA)-2*np.dot(fA.transpose(),fC)+np.dot(fC.transpose(),fC))/(fDvar*2*nSamp)
+    else:
+        for iQOI in range(0,model.nQOIs):
+            #Calculate 1st order parameter effects
+            sobolBase[iQOI,:]=1/(nSamp)*(np.sum(fC[:,:,iQOI]*fA[:, [iQOI]],axis=0)-np.sum(fA[:,iQOI]*fB[:,iQOI],axis=0))/(nSamp*fDvar[iQOI])
+            #Caclulate 2nd order parameter effects
+            sobolTot[iQOI,:]=(np.sum(fA[:,iQOI]**2,axis=0)-2*np.sum(fA[:, [iQOI]]*fC[:,:,iQOI],axis=0)\
+                                          +np.sum(fC[:,:,iQOI]**2,axis=0))/(2*nSamp*fDvar[iQOI])
     return sobolBase, sobolTot
 
 ##--------------------------------------GetSampDist----------------------------------------------------
 def GetSampDist(model, sampOptions):
-    # Determine Sample Function
+    # Determine Sample Function- Currently only 1 distribution type can be defined for all parameters
     if sampOptions.dist.lower() == 'norm':  # Normal Distribution
         sampDist = lambda nSamp: np.random.randn(nSamp,model.nPOIs)*np.sqrt(np.diag(model.cov))+model.basePOIs
+    elif sampOptions.dist.lower() == 'unif':  # uniform distribution
+        sampDist = lambda nSamp: sampOptions.distParms[[0],:]+(sampOptions.distParms[[1],:]-sampOptions.distParms[[0],:])\
+                                 *np.random.uniform(0,1,size=(nSamp,model.nPOIs))
+    elif sampOptions.dist.lower() == 'exponential': # exponential distribution
+        sampDist = lambda nSamp: np.random.exponential(distParms,size=(nSamp,model.nPOIs))
+    elif sampOptions.dist.lower() == 'beta': # beta distribution
+        sampDist = lambda nSamp:np.random.beta(distParms[[0],:], distParms[[1],:],size=(nSamp,model.nPOIs))
+    elif sampOptions.dist.lower() == 'InverseCDF': #Arbitrary distribution given by inverse cdf
+        sampDist=lambda nSamp: distParms(np.random.rand(nsamp,model.nPOIs))
     else:
-        raise Exception("Invalid value for options.samp.dist")  # Raise Exception if invalide distribution is entered
+        raise Exception("Invalid value for options.samp.dist. Supported distributions are normal, uniform, exponential, beta, \
+        and InverseCDF")  # Raise Exception if invalide distribution is entered
     model.sampDist=sampDist
     return model
 #

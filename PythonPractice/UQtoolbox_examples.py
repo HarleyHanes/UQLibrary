@@ -11,45 +11,40 @@ def GetExample(example, **kwargs):
     # Inputs: example- string that corresponds to the desired model
     # Outputs: model and options objects corresponding to the desired model
 
+
+    # Initialize options object
+    options = uq.uqOptions()
     # Select Example model
     if example.lower() == 'linear':
         baseEvalPoints = np.array([0, .5, 1, 2])  #Requires 1xnQOIs indexing
         model = uq.model(evalFcn=lambda params: linear_function(baseEvalPoints, params),
                          basePOIs=np.array([1, 1]),
                          covMat=np.array([[1, 0], [0, 1]]))
-        jacOptions = uq.jacOptions()  # Load base jacobian setttings
-        sampOptions = uq.sampOptions(nSamp=100)  # Keep normal sampling but reduce sample
+        options.sampOptions = uq.sampOptions(nSamp=100)  # Keep normal sampling but reduce sample
         # size to 100
-        plotOptions = uq.plotOptions()  # Load base plot options
     elif example.lower() == 'quadratic':
         baseEvalPoints = np.array([[0], [.5], [1], [2]])  # Currently requires 1xn or nx1 ordering
         model = uq.model(evalFcn=lambda params: quadratic_function(baseEvalPoints, params),
                          basePOIs=np.array([1, 1, 1]),
                          covMat=np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
-        jacOptions = uq.jacOptions()  # Load base jacobian setttings
-        sampOptions = uq.sampOptions(nSamp=100)  # Keep normal sampling but reduce sample size to 100
-        plotOptions = uq.plotOptions()  # Load base plot options
+        options.sampOptions = uq.sampOptions(nSamp=100)  # Keep normal sampling but reduce sample size to 100
     elif example.lower() == 'helmholtz':
         baseEvalPoints = np.arange(0, 1, .02)
-        print(baseEvalPoints)
         model = uq.model(evalFcn=lambda params: HelmholtzEnergy(baseEvalPoints, params),
                          basePOIs=np.array([-392.66, 770.1, 57.61]),
                          covMat=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
                                           [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
                                           [0.4021, -2.4078, 3.0493]]) * (10 ** 3))
-        jacOptions = uq.jacOptions()  # Load base jacobian setttings
-        sampOptions = uq.sampOptions(nSamp=10000)  # Keep normal sampling but reduce sample size to 100
-        plotOptions = uq.plotOptions()  # Load base plot options
-    elif example.lower()== 'integrated helmholtz'
-        baseEvalPoints=.8
+        options.sampOptions = uq.sampOptions(nSamp=10000)  # Keep normal sampling but reduce sample size to 100
+    elif example.lower()== 'integrated helmholtz':
+        baseEvalPoints= np.array([.8])
         model = uq.model(evalFcn=lambda params: IntegratedHelmholtzEnergy(baseEvalPoints,params),
-                         basePOIs=np.array([-392.66, 770.1, 57.61]),
+                         basePOIs=np.array([-389.4, 761.3, 61.5]),
                          covMat=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
                                           [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
                                           [0.4021, -2.4078, 3.0493]]) * (10 ** 3))
-        sampOptions = uq.sampOptions(nSamp=10000)  # Keep normal sampling but reduce sample size to 100
-        plotOptions = uq.plotOptions()  # Load base plot options
-
+        options.sampOptions = uq.sampOptions(dist="unif",distParms=np.array([[.8,.8,.8],[1.2,1.2,1.2]])*model.basePOIs)
+                                                # Use uniform sampling of +-20% nominal value
     else:
         raise Exception("Unrecognized Example Type")
 
@@ -58,9 +53,6 @@ def GetExample(example, **kwargs):
         model.basePOIs = kwargs['basePOI']
     if 'evalPoints' in kwargs:  # Determine eval points
         model.evalPoints = kwargs['evalPoints']
-
-    # Combine options objects
-    options = uq.uqOptions(jac=jacOptions, plot=plotOptions, samp=sampOptions)
 
     return model, options
 
@@ -84,4 +76,10 @@ def HelmholtzEnergy(x, params):
         return params[0] * (x ** 2) + params[1] * (x ** 4) + params[2] * (x ** 6)
     elif params.ndim == 2:
         return params[:, 0] * (x ** 2) + params[:, 1] * (x ** 4) + params[:, 2] * (x**6)
+def IntegratedHelmholtzEnergy(x,params):
+    if params.ndim == 1:
+        return params[0] * (x ** 3)/3 + params[1] * (x ** 5)/5 + params[2] * (x ** 7)/7
+    elif params.ndim == 2:
+        return params[:, 0] * (x ** 3)/3 + params[:, 1] * (x ** 5)/5 + params[:, 2] * (x**7)/7
+
            

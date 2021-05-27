@@ -4,7 +4,7 @@
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
 # Import modules
-# import numpy as np
+import numpy as np
 import UQtoolbox as uq
 import UQtoolbox_examples as uqExamples
 
@@ -15,8 +15,7 @@ import UQtoolbox_examples as uqExamples
 
 
 # Get model and options object from Example set
-# [model, options]=uqExamples.GetExample('linear')
-[model, options] = uqExamples.GetExample('linear')
+[model, options] = uqExamples.GetExample('integrated helmholtz')
 
 # Run UQ package
 results = uq.RunUQ(model, options)
