@@ -7,6 +7,7 @@
 
 import numpy as np
 import sys
+import warnings
 #import seaborne as seaborne
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Class Definitions----------------------------------------
@@ -26,9 +27,6 @@ class jacOptions:
 class sampOptions:
     def __init__(self, nSamp=10000, dist='norm', distParms=(0,1)):
         self.nSamp = nSamp                      #Number of samples to be generated for GSA
-        self.dist = dist                        #String identifying sampling distribution for parameters
-                                                #       Supported distributions: unif, normal, exponential, beta, inverseCDF
-        self.distParms=distParms
         pass
 #--------------------------------------plotOptions------------------------------------------------
 class plotOptions:
@@ -48,14 +46,34 @@ class uqOptions:
 class model:
     #Model sets should be initialized with base parameter settings, covariance Matrix, and eval function that
     #   takes in a vector of POIs and outputs a vector of QOIs
-    def __init__(self,basePOIs=np.empty, covMat=np.empty, evalFcn=np.empty):
+    def __init__(self,basePOIs=np.empty(0), cov=np.empty(0), evalFcn=np.empty(0), dist='unif',distParms='null'):
         self.basePOIs=basePOIs
-        self.cov=covMat
+        if np.ndim(self.basePOIs)>1:                                    #Check to see if basePOIs is a vector
+            self.basePOIs=np.squeeze(self.basePOIs)                     #Make a vector if an array with 1 dim greater than 1
+            if np.ndim(self.basePOIs)!=1:                               #Issue an error if basePOIs is a matrix or tensor
+                raise Exception("Error! More than one dimension of size 1 detected for model.basePOIs, model.basePOIs must be dimension 1")
+            else:                                                       #Issue a warning if dimensions were squeezed out of base POIs
+                warnings.warn("Warning: model.basePOIs was reduced a dimension 1 array. No entries were deleted.")
+        self.nPOIs=len(self.basePOIs)
         self.evalFcn=evalFcn
         self.baseQOIs=evalFcn(basePOIs)
-        self.sampDist='null'
-        self.nPOIs=len(self.basePOIs)
         self.nQOIs=len(self.baseQOIs)
+        self.cov=cov
+        if self.cov.size!=0 and np.shape(self.cov)!=(self.nPOIs,self.nPOIs):
+            raise Exception("Error! model.cov is not an nPOI x nPOI array")
+        self.dist = dist                        #String identifying sampling distribution for parameters
+                                                #       Supported distributions: unif, normal, exponential, beta, inverseCDF
+        if isinstance(distParms,str):
+            if self.dist.lower()=='unif':
+                self.distParms=[[.8],[1.2]]*np.ones((2,self.nPOIs))*self.basePOIs
+            elif self.dist.lower()=='norm':
+                if cov.size()==0:
+                    self.distParms=[[1],[.2]]*np.ones((2,self.nPOIs))*self.basePOIs
+                else:
+                    self.distParms=[self.basePOIs, np.diag(self.cov,k=0)]
+
+        else:
+            self.distParms=distParms
     pass
 
 ##------------------------------------results-----------------------------------------------------
@@ -253,26 +271,26 @@ def GetSobol(model,sampOptions):
             #Caclulate 2nd order parameter effects
             sobolTot[iQOI,:]=(np.sum(fA[:,iQOI]**2,axis=0)-2*np.sum(fA[:, [iQOI]]*fAB[:,:,iQOI],axis=0)\
                                           +np.sum(fAB[:,:,iQOI]**2,axis=0))/(2*nSamp*fDvar[iQOI])
-    print(fDvar)
-    print(sobolBase)
-    print(sobolTot)
+
+    print(sampA[:10])
 
     return sobolBase, sobolTot
 
 ##--------------------------------------GetSampDist----------------------------------------------------
 def GetSampDist(model, sampOptions):
     # Determine Sample Function- Currently only 1 distribution type can be defined for all parameters
-    if sampOptions.dist.lower() == 'norm':  # Normal Distribution
+    if model.dist.lower() == 'norm':  # Normal Distribution
         sampDist = lambda nSamp: np.random.randn(nSamp,model.nPOIs)*np.sqrt(np.diag(model.cov))+model.basePOIs
-    elif sampOptions.dist.lower() == 'unif':  # uniform distribution
-        sampDist = lambda nSamp: sampOptions.distParms[[0],:]+(sampOptions.distParms[[1],:]-sampOptions.distParms[[0],:])\
+    elif model.dist.lower() == 'unif':  # uniform distribution
+        sampDist = lambda nSamp: model.distParms[[0],:]+(model.distParms[[1],:]-model.distParms[[0],:])\
                                  *np.random.uniform(0,1,size=(nSamp,model.nPOIs))
-    elif sampOptions.dist.lower() == 'exponential': # exponential distribution
-        sampDist = lambda nSamp: np.random.exponential(distParms,size=(nSamp,model.nPOIs))
-    elif sampOptions.dist.lower() == 'beta': # beta distribution
-        sampDist = lambda nSamp:np.random.beta(distParms[[0],:], distParms[[1],:],size=(nSamp,model.nPOIs))
-    elif sampOptions.dist.lower() == 'InverseCDF': #Arbitrary distribution given by inverse cdf
-        sampDist = lambda nSamp: distParms(np.random.rand(nsamp,model.nPOIs))
+    elif model.dist.lower() == 'exponential': # exponential distribution
+        sampDist = lambda nSamp: np.random.exponential(model.distParms,size=(nSamp,model.nPOIs))
+    elif model.dist.lower() == 'beta': # beta distribution
+        sampDist = lambda nSamp:np.random.beta(model.distParms[[0],:], model.distParms[[1],:],\
+                                               size=(nSamp,model.nPOIs))
+    elif model.dist.lower() == 'InverseCDF': #Arbitrary distribution given by inverse cdf
+        sampDist = lambda nSamp: sampOptions.fInverseCDF(np.random.rand(nsamp,model.nPOIs))
     else:
         raise Exception("Invalid value for options.samp.dist. Supported distributions are normal, uniform, exponential, beta, \
         and InverseCDF")  # Raise Exception if invalide distribution is entered
