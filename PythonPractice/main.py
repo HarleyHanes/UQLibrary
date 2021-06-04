@@ -1,25 +1,59 @@
-# This is a sample Python script.
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
-# Import modules
-import numpy as np
+from SALib.sample import saltelli
+from SALib.analyze import sobol
+from SALib.test_functions import Ishigami
 import UQtoolbox as uq
 import UQtoolbox_examples as uqExamples
-
-# Main Script
-
-
-# Define assessing points and parameters
+import numpy as np
 
 
-# Get model and options object from Example set
-[model, options] = uqExamples.GetExample('integrated helmholtz')
+#Set seed for reporducibility
+np.random.seed(10)
+#
+# # Define the model inputs
+problem = {
+    'num_vars': 3,
+    'names': ['x1', 'x2', 'x3'],
+    'bounds': [[-3.14159265359, 3.14159265359],
+               [-3.14159265359, 3.14159265359],
+               [-3.14159265359, 3.14159265359]]
+}
 
-#[model, options] = uqExamples.GetExample('linear product')
+# Generate samples
+param_values = saltelli.sample(problem, 512*2)
 
-# Run UQ package
+# Run model (example)
+Y = Ishigami.evaluate(param_values)
+
+# Perform analysis
+Si = sobol.analyze(problem, Y, print_to_console=True)
+
+# Print the first-order sensitivity indices
+print(Si['S1'])
+
+#
+# # Main Script
+#
+#
+# # Define assessing points and parameters
+# #
+#
+# # Get model and options object from Example set
+# # [model, options] = uqExamples.GetExample('integrated helmholtz')
+#
+# # [model, options] = uqExamples.GetExample('linear product')
+#
+#
+
+#
+[model, options] = uqExamples.GetExample('ishigami')
+#
+# # [model, options] = uqExamples.GetExample('linear')
+#
+# # [model, options] = uqExamples.GetExample('trial function')
+#
+# # Run UQ package
 results = uq.RunUQ(model, options)
 
 # Estimate Jacobian
@@ -38,5 +72,3 @@ results = uq.RunUQ(model, options)
 #         Jac[i]=(yRight-yLeft)/(2*h)
 #
 # print("Jacobian: " + str(Jac))
-
-# See PyCharm help at https://www.jetbrains.com/help/pycha

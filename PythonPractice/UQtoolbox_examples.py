@@ -4,6 +4,7 @@
 
 import UQtoolbox as uq
 import numpy as np
+import math as math
 
 
 def GetExample(example, **kwargs):
@@ -15,12 +16,16 @@ def GetExample(example, **kwargs):
     options = uq.uqOptions()
     # Select Example model
     if example.lower() == 'linear':
-        baseEvalPoints = np.array([0, .5, 1, 2])  # Requires 1xnQOIs indexing
+        #baseEvalPoints = np.array([0, .5, 1, 2])  # Requires 1xnQOIs indexing
+        baseEvalPoints= np.array([1])
         model = uq.model(evalFcn=lambda params: linear_function(baseEvalPoints, params),
                          basePOIs=np.array([1, 1]),
-                         cov=np.array([[1, 0], [0, 1]]))
-        options.samp = uq.sampOptions(nSamp=100)  # Keep normal sampling but reduce sample
-        # size to 100
+                         cov=np.array([[1, 0], [0, 1]]),
+                         dist='unif',
+                         distParms=np.array([[0], [1]])*np.array([1, 1])
+                         #distParms=np.array([[.9999999999], [1.0000000001]])*np.array([1, 1])
+                         )
+        options.samp = uq.sampOptions() # Keep normal sampling scheme
     elif example.lower() == 'quadratic':
         baseEvalPoints = np.array([[0], [.5], [1], [2]])  # Currently requires 1xn or nx1 ordering
         model = uq.model(evalFcn=lambda params: quadratic_function(baseEvalPoints, params),
@@ -45,13 +50,29 @@ def GetExample(example, **kwargs):
                                        [0.4021, -2.4078, 3.0493]]) * (10 ** 3),
                          dist="unif")  # Use uniform sampling of +-20% nominal value
         model.distParms = np.array([[.8, .8, .8], [1.2, 1.2, 1.2]]) * model.basePOIs
+        #model.distParms = np.array([[.999999, .999999, .999999], [1.000001, 1.000001, 1.000001]]) * model.basePOIs
         options.samp = uq.sampOptions()  # Use default number of samples
     elif example.lower() == 'linear product':  # Linear product example taken from Homma1996
-        model = uq.model(evalFcn=lambda params: LinearProd(params),
+        model = uq.model(evalFcn=LinearProd,
                          basePOIs=np.array([.5, .5, .5, .5, .5]),
                          dist="unif",
                          distParms=np.array([[0, 0, 0, 0, 0], [1, 1, 1, 1, 1]]))
         options.samp = uq.sampOptions()  # Use default number of samples
+    elif example.lower() == 'ishigami':
+        model = uq.model(evalFcn=Ishigami,
+                         basePOIs=np.array([0, 0, 0]),
+                         dist="unif",
+                         distParms=np.array([[-math.pi, -math.pi, -math.pi], [math.pi, math.pi, math.pi]]))
+        options.jac=uq.jacOptions(method='finite', xDelta=10**(-6))
+        options.samp=uq.sampOptions()   # Use default number of samples
+    elif example.lower() == 'trial function':
+        model = uq.model(evalFcn=TrialFunction,
+                         basePOIs=np.array([1, 1, 1]),
+                         dist="unif",
+                         distParms=np.array([[1, 1, 1], [1000, 100, 10]])
+                         )
+        options.samp=uq.sampOptions()
+
     else:
         raise Exception("Unrecognized Example Type")
 
@@ -66,16 +87,16 @@ def GetExample(example, **kwargs):
 
 def linear_function(x, params):
     if params.ndim == 1:
-        return params[0] + x * params[1]
+        return params[0] + (x * params[1])
     if params.ndim == 2:
-        return np.outer(params[:, 0], np.ones(x.size)) + np.outer(params[:, 1], x)
+        return params[:, 0] + (params[:, 1] * x)
 
 
 def quadratic_function(x, params):
     if params.ndim == 1:
-        return params[0] + x * params[:, 1] + x ** 2 * params[:, 2]
+        return params[0] + (x * params[:, 1]) + ((x ** 2) * params[:, 2])
     if params.ndim == 2:
-        return params[:, 0] + x * params[:, 1] + x ** 2 * params[:, 2]
+        return params[:, 0] + x * params[:, 1] + (x ** 2) * params[:, 2]
 
 
 def HelmholtzEnergy(x, params):
@@ -97,3 +118,13 @@ def LinearProd(params):
         return np.array([np.prod(2 * params + 1) / (2 ** (len(np.transpose(params))))])
     elif params.ndim == 2:
         return np.prod(2 * params + 1, axis=1) / (2 ** (len(np.transpose(params)) + 1))
+def Ishigami(params):
+    if params.ndim == 1:
+        return np.array([np.sin(params[0])+np.sin(params[1])**2+(params[2]**4)*np.sin(params[0])])
+    elif params.ndim == 2:
+        return np.array([np.sin(params[:, 0])+np.sin(params[:, 1])**2+(params[:, 2]**4)*np.sin(params[:, 0])])
+def TrialFunction(params):
+    if params.ndim == 1:
+        return np.array([params[0]+params[1]*(params[2]**2)])
+    elif params.ndim == 2:
+        return params[:, 0]+params[:, 1]*(params[:, 2]**2)
