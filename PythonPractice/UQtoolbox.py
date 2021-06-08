@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 
 ##--------------------------------------uqOptions--------------------------------------------------
 #Define class "uqOptions", this will be the class used to collect algorithm options for functions
-#   -Subclasses: jacOptions, plotOptions, sampOptions
-#--------------------------------------jacOptions------------------------------------------------
-class jacOptions:
+#   -Subclasses: lsaOptions, plotOptions, gsaOptions
+#--------------------------------------lsaOptions------------------------------------------------
+class lsaOptions:
     def __init__(self,xDelta=10**(-12), method='complex', scale='y'):
         self.xDelta=xDelta                        #Input perturbation for calculating jacobian
         self.scale=scale                          #scale can be y, n, or both for outputing scaled, unscaled, or both
@@ -30,9 +30,9 @@ class jacOptions:
         if self.xDelta<0 or not isinstance(self.xDelta,float):
             raise Exception('Error! Non-compatibale xDelta, please use a positive floating point number')
     pass
-#--------------------------------------sampOptions------------------------------------------------
-class sampOptions:
-    def __init__(self, nSamp=10000):
+#--------------------------------------gsaOptions------------------------------------------------
+class gsaOptions:
+    def __init__(self, nSamp=100000):
         self.nSamp = nSamp                      #Number of samples to be generated for GSA
         pass
 #--------------------------------------plotOptions------------------------------------------------
@@ -42,8 +42,8 @@ class plotOptions:
 #--------------------------------------uqOptions------------------------------------------------
 #   Class holding the above options subclasses
 class uqOptions:
-    def __init__(self,jac=jacOptions(),plot=plotOptions(),samp=sampOptions()):
-        self.jac=jac
+    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),samp=gsaOptions()):
+        self.lsa=lsa
         self.plot=plot
         self.samp=samp
     pass
@@ -135,13 +135,8 @@ def RunUQ(model, options):
     results.gsa = GSA(model, options)
 
     #Print Results
-    print("Base Parameters: " + str(model.basePOIs))
-    print("Base values: " + str(model.baseQOIs))
-    print("Jacobian: " + str(results.lsa.jac))
-    print("Relative Sensitivities: " + str(results.lsa.rsi))
-    print("Fisher Matrix: " + str(results.lsa.fisher))
-    print("1st Order Sobol Indices: " + str(results.gsa.sobolBase))
-    print("Total Sobol Indices: " + str(results.gsa.sobolTot))
+    PrintResults(results,model)
+
     return results
 
 # Top order functions- These functions are the main functions for each component of our analysis they include,
@@ -157,9 +152,9 @@ def LSA(model, options):
     # Outputs: Object of class lsa with Jacobian, RSI, and Fisher information matrix
 
     # Calculate Jacobian
-    jacRaw=GetJacobian(model, options.jac, scale=False)
+    jacRaw=GetJacobian(model, options.lsa, scale=False)
     # Calculate relative sensitivity index (RSI)
-    jacRSI=GetJacobian(model, options.jac, scale=True)
+    jacRSI=GetJacobian(model, options.lsa, scale=True)
     # Calculate Fisher Information Matrix from jacobian
     fisherMat=np.dot(np.transpose(jacRaw), jacRaw)
 
@@ -177,20 +172,30 @@ def GSA(model, options):
     # Required Inputs: Object of class "model" and object of class "options"
     # Outputs: Object of class gsa with fisher and sobol elements
     #Get Parameter Distributions
-    model=GetSampDist(model, options.samp)
+    model=GetSampDist(model, options.gsa)
     #Calculate Sobol Indices
-    [sobolBase, sobolTot]=CalculateSobol(model,options.samp)
+    [sobolBase, sobolTot]=CalculateSobol(model,options.gsa)
     return gsaResults(sobolBase=sobolBase, sobolTot=sobolTot)
+
+def PrintResults(results,model):
+    # Print Results
+    print("Base Parameters: " + str(model.basePOIs))
+    print("Base values: " + str(model.baseQOIs))
+    print("Jacobian: " + str(results.lsa.jac))
+    print("Relative Sensitivities: " + str(results.lsa.rsi))
+    print("Fisher Matrix: " + str(results.lsa.fisher))
+    print("1st Order Sobol Indices: " + str(results.gsa.sobolBase))
+    print("Total Sobol Indices: " + str(results.gsa.sobolTot))
 
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Support Functions----------------------------------------
 ###----------------------------------------------------------------------------------------------
 
 ##--------------------------------------GetJacobian-----------------------------------------------------
-def GetJacobian(model, jacOptions, **kwargs):
+def GetJacobian(model, lsaOptions, **kwargs):
     # GetJacobian calculates the Jacobian for n QOIs and p POIs
     # Required Inputs: object of class "model" (.cov element not required)
-    #                  object of class "jacOptions"
+    #                  object of class "lsaOptions"
     # Optional Inputs: alternate POI position to estimate Jacobian at (*arg) or complex step size (h)
     if 'scale' in kwargs:                                                   # Determine whether to scale derivatives
                                                                             #   (for use in relative sensitivity indices)
@@ -202,7 +207,7 @@ def GetJacobian(model, jacOptions, **kwargs):
 
     #Load options parameters for increased readibility
     xBase=model.basePOIs
-    xDelta=jacOptions.xDelta
+    xDelta=lsaOptions.xDelta
 
     #Initialize base QOI value, the number of POIs, and number of QOIs
     yBase=model.evalFcn(xBase)                                              # Get base QOI values
@@ -213,20 +218,23 @@ def GetJacobian(model, jacOptions, **kwargs):
 
     for iPOI in range(0, nPOIs):                                            # Loop through POIs
         # Isolate Parameters
-        if jacOptions.method.lower()== 'complex':
+        if lsaOptions.method.lower()== 'complex':
             xPert = xBase + np.zeros(shape=xBase.shape)*1j                  # Initialize Complex Perturbed input value
             xPert[iPOI] += xDelta * 1j                                      # Add complex Step in input
-        elif jacOptions.method.lower() == 'finite':
+        elif lsaOptions.method.lower() == 'finite':
             xPert=xBase*(1+xDelta)
         yPert = model.evalFcn(xPert)                                        # Calculate perturbed output
         for jQOI in range(0, nQOIs):                                        # Loop through QOIs
-            if jacOptions.method.lower()== 'complex':
+            if lsaOptions.method.lower()== 'complex':
+                print(yPert)
+                print(yPert[jQOI])
+                print(jac)
                 jac[jQOI, iPOI] = np.imag(yPert[jQOI] / xDelta)                 # Estimate Derivative w/ 2nd order complex
-            elif jacOptions.method.lower() == 'finite':
+            elif lsaOptions.method.lower() == 'finite':
                 jac[jQOI, iPOI] = (yPert[jQOI]-yBase[jQOI]) / xDelta
             #Only Scale Jacobian if 'scale' value is passed True in function call
             if scale:
-                jac[jQOI, iPOI] *= xBase[iPOI] * np.sign(yBase[jQOI]) / (sys.float_info.epsilon + yBase[jQOI]**2)
+                jac[jQOI, iPOI] *= xBase[iPOI] * np.sign(yBase[jQOI]) / (sys.float_info.epsilon + yBase[jQOI])
                                                                             # Scale jacobian for relative sensitivity
         del xPert, yPert, iPOI, jQOI                                        # Clear intermediate variables
     return jac                                                              # Return Jacobian
@@ -235,12 +243,12 @@ def GetJacobian(model, jacOptions, **kwargs):
 ##--------------------------------------GetSobol----------------------------------------------------
 # GSA Component Functions
 
-def CalculateSobol(model, sampOptions):
+def CalculateSobol(model, gsaOptions):
     #GetSobol calculates sobol indices using satelli approximation method
     #Inputs: model object (with evalFcn, sampDist, and nParams)
     #        sobolOptions object
     # Load options and data
-    nSamp = sampOptions.nSamp
+    nSamp = gsaOptions.nSamp
     sampDist = model.sampDist
     evalFcn = model.evalFcn
     # Make 2 POI sample matrices with nSamp samples each
@@ -268,7 +276,7 @@ def CalculateSobol(model, sampOptions):
         del sampAB
 
     #QOI variance
-    fDvar=np.var(fD)
+    fDvar=np.var(fD, axis=0)
     #fDvar=np.sum(fD**2)/(2*nSamp)-(np.sum(fD,axis=0)/(2*nSamp))**2
 
     sobolBase=np.empty((model.nQOIs,model.nPOIs))
@@ -293,7 +301,7 @@ def CalculateSobol(model, sampOptions):
     return sobolBase, sobolTot
 
 ##--------------------------------------GetSampDist----------------------------------------------------
-def GetSampDist(model, sampOptions):
+def GetSampDist(model, gsaOptions):
     # Determine Sample Function- Currently only 1 distribution type can be defined for all parameters
     if model.dist.lower() == 'norm':  # Normal Distribution
         sampDist = lambda nSamp: np.random.randn(nSamp,model.nPOIs)*np.sqrt(np.diag(model.cov))+model.basePOIs
@@ -306,12 +314,14 @@ def GetSampDist(model, sampOptions):
         sampDist = lambda nSamp:np.random.beta(model.distParms[[0],:], model.distParms[[1],:],\
                                                size=(nSamp,model.nPOIs))
     elif model.dist.lower() == 'InverseCDF': #Arbitrary distribution given by inverse cdf
-        sampDist = lambda nSamp: sampOptions.fInverseCDF(np.random.rand(nsamp,model.nPOIs))
+        sampDist = lambda nSamp: gsaOptions.fInverseCDF(np.random.rand(nSamp,model.nPOIs))
     else:
-        raise Exception("Invalid value for options.samp.dist. Supported distributions are normal, uniform, exponential, beta, \
+        raise Exception("Invalid value for options.gsa.dist. Supported distributions are normal, uniform, exponential, beta, \
         and InverseCDF")  # Raise Exception if invalide distribution is entered
     model.sampDist=sampDist
     return model
+
+
 #
 #
 # def PlotGSA(evalMat, sampleMat):
