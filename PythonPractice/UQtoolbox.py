@@ -39,9 +39,9 @@ class gsaOptions:
         pass
 #--------------------------------------plotOptions------------------------------------------------
 class plotOptions:
-    def __init__(self,run=True):
+    def __init__(self,run=True,nPoints=100):
         self.run=run
-
+        self.nPoints=nPoints
         pass
 #--------------------------------------uqOptions------------------------------------------------
 #   Class holding the above options subclasses
@@ -186,8 +186,8 @@ def GSA(model, options):
     #Make Distribution Samples and Calculate model results
     [fA, fB, fAB, fD, sampD] = GetSamples(model, options.gsa)
     #Plot Sample Statistics
-    # if options.plot.run:
-    #     PlotGSA(model, gsaResults)
+    if options.plot.run:
+        PlotGSA(model, sampD, fD, options.plot)
     #Calculate Sobol Indices
     [sobolBase, sobolTot]=CalculateSobol(fA, fB, fAB, fD)
     return gsaResults(fD=fD, fAB=fAB, sampD= sampD, sobolBase=sobolBase, sobolTot=sobolTot)
@@ -350,28 +350,35 @@ def GetSampDist(model, gsaOptions):
 
 #
 #
-def PlotGSA(model, sampleMat, evalMat):
-    #Intialize Variables
+def PlotGSA(model, sampleMat, evalMat, plotOptions):
+    #Reduce Sample number
+    plotPoints=range(0,int(sampleMat.shape[0]), int(sampleMat.shape[0]/plotOptions.nPoints))
     #Plot POI-POI correlation and distributions
     figure, axes=plt.subplots(nrows=model.nPOIs, ncols= model.nPOIs)
     for iPOI in range(0,model.nPOIs):
-        for jPOI in range(0,iPOI):
+        for jPOI in range(0,iPOI+1):
+            print(iPOI)
+            print(jPOI)
             if iPOI==jPOI:
-                axes[iPOI,jPOI].hist(sampleMat[:,iPOI], bins=20)
+                n, bins, patches = axes[iPOI, jPOI].hist(sampleMat[:,iPOI])
             else:
-                axes[iPOI, jPOI].plot(sampleMat[:,iPOI], sampleMat[:,jPOI])
+                axes[iPOI, jPOI].plot(sampleMat[plotPoints,iPOI], sampleMat[plotPoints,jPOI],'b*')
     figure.tight_layout()
     #Plot QOI-QOI correlationa and distributions
     figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nQOIs)
     for iQOI in range(0,model.nQOIs):
-        for jQOI in range(0,iQOI):
+        for jQOI in range(0,iQOI+1):
             if iQOI==jQOI:
-                axes[iQOI,jQOI].hist(evalMat[:,iQOI], bins=20)
+                axes[iQOI, jQOI].hist([evalMat[:,iQOI]])
             else:
-                axes[iQOI, jQOI].plot(sampleMat[:,iQOI], sampleMat[:,jQOI])
+                axes[iQOI, jQOI].plot(evalMat[plotPoints,iQOI], evalMat[plotPoints,jQOI],'b*')
     figure.tight_layout()
 
     #Plot POI-QOI correlation
-
-    #Plot QOI distribution
+    figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nPOIs)
+    for iQOI in range(0,model.nQOIs):
+        for jPOI in range(0, model.nPOIs):
+            axes[iQOI, jPOI].plot(sampleMat[plotPoints,jPOI], evalMat[plotPoints,iQOI],'b*')
+    #Display all figures
+    plt.show()
 
