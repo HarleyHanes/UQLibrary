@@ -19,7 +19,8 @@ import matplotlib.pyplot as plt
 #   -Subclasses: lsaOptions, plotOptions, gsaOptions
 #--------------------------------------lsaOptions------------------------------------------------
 class lsaOptions:
-    def __init__(self,xDelta=10**(-12), method='complex', scale='y'):
+    def __init__(self,run=True,  xDelta=10**(-12), method='complex', scale='y'):
+        self.run=run                              #Whether to run lsa (True or False)
         self.xDelta=xDelta                        #Input perturbation for calculating jacobian
         self.scale=scale                          #scale can be y, n, or both for outputing scaled, unscaled, or both
         self.method=method                        #method used for approximating derivatives
@@ -32,12 +33,15 @@ class lsaOptions:
     pass
 #--------------------------------------gsaOptions------------------------------------------------
 class gsaOptions:
-    def __init__(self, nSamp=100000):
+    def __init__(self, run=True, nSamp=100000):
+        self.run=run                            #Whether to run GSA (True or False)
         self.nSamp = nSamp                      #Number of samples to be generated for GSA
         pass
 #--------------------------------------plotOptions------------------------------------------------
 class plotOptions:
-    def __init__(self,):
+    def __init__(self,run=True):
+        self.run=run
+
         pass
 #--------------------------------------uqOptions------------------------------------------------
 #   Class holding the above options subclasses
@@ -101,9 +105,12 @@ class lsaResults:
 # Define class "gsaResults" which holds sobol analysis results
 class gsaResults:
     #
-    def __init__(self,sobolBase=np.empty, sobolTot=np.empty):
+    def __init__(self,sobolBase=np.empty, sobolTot=np.empty, fD=np.empty, fAB=np.empty, sampD=np.empty):
         self.sobolBase=sobolBase
         self.sobolTot=sobolTot
+        self.fD=fD
+        self.fAB=fAB
+        self.sampD=sampD
     pass
 ##------------------------------------results-----------------------------------------------------
 # Define class "results" which holds a gsaResults object and lsaResults object
@@ -112,6 +119,7 @@ class results:
     def __init__(self,lsa=lsaResults(), gsa=gsaResults()):
         self.lsa=lsa
         self.gsa=gsa
+    pass
 
 
 ###----------------------------------------------------------------------------------------------
@@ -129,13 +137,15 @@ def RunUQ(model, options):
     #Outpts: results object, a list of summary results is printed to command window
 
     #Run Local Sensitivity Analysis
-    results.lsa = LSA(model, options)
+    if options.lsa.run:
+        results.lsa = LSA(model, options)
 
     #Run Global Sensitivity Analysis
-    results.gsa = GSA(model, options)
+    if options.gsa.run:
+        results.gsa = GSA(model, options)
 
     #Print Results
-    PrintResults(results,model)
+    PrintResults(results,model,options)
 
     return results
 
@@ -173,19 +183,26 @@ def GSA(model, options):
     # Outputs: Object of class gsa with fisher and sobol elements
     #Get Parameter Distributions
     model=GetSampDist(model, options.gsa)
+    #Make Distribution Samples and Calculate model results
+    [fA, fB, fAB, fD, sampD] = GetSamples(model, options.gsa)
+    #Plot Sample Statistics
+    # if options.plot.run:
+    #     PlotGSA(model, gsaResults)
     #Calculate Sobol Indices
-    [sobolBase, sobolTot]=CalculateSobol(model,options.gsa)
-    return gsaResults(sobolBase=sobolBase, sobolTot=sobolTot)
+    [sobolBase, sobolTot]=CalculateSobol(fA, fB, fAB, fD)
+    return gsaResults(fD=fD, fAB=fAB, sampD= sampD, sobolBase=sobolBase, sobolTot=sobolTot)
 
-def PrintResults(results,model):
+def PrintResults(results,model,options):
     # Print Results
-    print("Base Parameters: " + str(model.basePOIs))
-    print("Base values: " + str(model.baseQOIs))
-    print("Jacobian: " + str(results.lsa.jac))
-    print("Relative Sensitivities: " + str(results.lsa.rsi))
-    print("Fisher Matrix: " + str(results.lsa.fisher))
-    print("1st Order Sobol Indices: " + str(results.gsa.sobolBase))
-    print("Total Sobol Indices: " + str(results.gsa.sobolTot))
+    if options.lsa.run:
+        print("Base Parameters: " + str(model.basePOIs))
+        print("Base values: " + str(model.baseQOIs))
+        print("Jacobian: " + str(results.lsa.jac))
+        print("Relative Sensitivities: " + str(results.lsa.rsi))
+        print("Fisher Matrix: " + str(results.lsa.fisher))
+    if options.gsa.run:
+        print("1st Order Sobol Indices: " + str(results.gsa.sobolBase))
+        print("Total Sobol Indices: " + str(results.gsa.sobolTot))
 
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Support Functions----------------------------------------
@@ -226,9 +243,6 @@ def GetJacobian(model, lsaOptions, **kwargs):
         yPert = model.evalFcn(xPert)                                        # Calculate perturbed output
         for jQOI in range(0, nQOIs):                                        # Loop through QOIs
             if lsaOptions.method.lower()== 'complex':
-                print(yPert)
-                print(yPert[jQOI])
-                print(jac)
                 jac[jQOI, iPOI] = np.imag(yPert[jQOI] / xDelta)                 # Estimate Derivative w/ 2nd order complex
             elif lsaOptions.method.lower() == 'finite':
                 jac[jQOI, iPOI] = (yPert[jQOI]-yBase[jQOI]) / xDelta
@@ -243,11 +257,7 @@ def GetJacobian(model, lsaOptions, **kwargs):
 ##--------------------------------------GetSobol----------------------------------------------------
 # GSA Component Functions
 
-def CalculateSobol(model, gsaOptions):
-    #GetSobol calculates sobol indices using satelli approximation method
-    #Inputs: model object (with evalFcn, sampDist, and nParams)
-    #        sobolOptions object
-    # Load options and data
+def GetSamples(model,gsaOptions):
     nSamp = gsaOptions.nSamp
     sampDist = model.sampDist
     evalFcn = model.evalFcn
@@ -274,23 +284,39 @@ def CalculateSobol(model, gsaOptions):
         else:
             fAB[:, iParams, :] = evalFcn(sampAB)  # nSamp x nPOI x nQOI tensor
         del sampAB
+    return fA, fB, fAB, fD, np.concatenate((sampA.copy(), sampB.copy()), axis=0)
 
+def CalculateSobol(fA, fB, fAB, fD):
+    #Calculates calculates sobol indices using satelli approximation method
+    #Inputs: model object (with evalFcn, sampDist, and nParams)
+    #        sobolOptions object
+    #Determing number of samples, QOIs, and POIs based on inputs
+    nSamp=fAB.shape[0]
+    if fAB.ndim==1:
+        nQOIs=1
+        nPOIs=1
+    elif fAB.ndim==2:
+        nQOIs=1
+        nPOIs=fAB.shape[1]
+    elif fAB.ndim==3:
+        nPOIs=fAB.shape[1]
+        nQOIs=fAB.shape[2]
+    else:
+        raise(Exception('fAB has greater than 3 dimensions, make sure fAB is the squeezed form of nSamp x nPOI x nQOI'))
     #QOI variance
     fDvar=np.var(fD, axis=0)
-    #fDvar=np.sum(fD**2)/(2*nSamp)-(np.sum(fD,axis=0)/(2*nSamp))**2
 
-    sobolBase=np.empty((model.nQOIs,model.nPOIs))
-    sobolTot=np.empty((model.nQOIs,model.nPOIs))
-    if model.nQOIs==1:
+    sobolBase=np.empty((nQOIs, nPOIs))
+    sobolTot=np.empty((nQOIs, nPOIs))
+    if nQOIs==1:
         #Calculate 1st order parameter effects
         sobolBase=np.sum(fB*(fAB-fA), axis=0)/(nSamp*fDvar)
-        #sobolBase=((1/nSamp)*(np.sum(fB*fAB,axis=0)-np.sum(fB*fA,axis=0)))/fDvar
-        #sobolBase=(np.tensordot(fB,fAB,axis=0)-np.inner(fB,fAB,axis=0))/(nSamp*fDvar)
+
         #Caclulate 2nd order parameter effects
         sobolTot=np.sum((fA-fAB)**2, axis=0)/(2*nSamp*fDvar)
-        #sobolTot=(np.dot(fA.transpose(),fA)-2*np.dot(fA.transpose(),fC)+np.dot(fC.transpose(),fC))/(fDvar*2*nSamp)
+
     else:
-        for iQOI in range(0,model.nQOIs):
+        for iQOI in range(0,nQOIs):
             #Calculate 1st order parameter effects
             sobolBase[iQOI,:]=1/(nSamp)*(np.sum(fAB[:,:,iQOI]*fA[:, [iQOI]],axis=0)-np.sum(fA[:,iQOI]*fB[:,iQOI],axis=0))/(nSamp*fDvar[iQOI])
             #Caclulate 2nd order parameter effects
@@ -324,12 +350,28 @@ def GetSampDist(model, gsaOptions):
 
 #
 #
-# def PlotGSA(evalMat, sampleMat):
-#     #Intialize Variables
-#
-#     #Plot POI-POI correlation
-#
-#     #Plot POI-QOI correlation
-#
-#     #Plot QOI distribution
-#
+def PlotGSA(model, sampleMat, evalMat):
+    #Intialize Variables
+    #Plot POI-POI correlation and distributions
+    figure, axes=plt.subplots(nrows=model.nPOIs, ncols= model.nPOIs)
+    for iPOI in range(0,model.nPOIs):
+        for jPOI in range(0,iPOI):
+            if iPOI==jPOI:
+                axes[iPOI,jPOI].hist(sampleMat[:,iPOI], bins=20)
+            else:
+                axes[iPOI, jPOI].plot(sampleMat[:,iPOI], sampleMat[:,jPOI])
+    figure.tight_layout()
+    #Plot QOI-QOI correlationa and distributions
+    figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nQOIs)
+    for iQOI in range(0,model.nQOIs):
+        for jQOI in range(0,iQOI):
+            if iQOI==jQOI:
+                axes[iQOI,jQOI].hist(evalMat[:,iQOI], bins=20)
+            else:
+                axes[iQOI, jQOI].plot(sampleMat[:,iQOI], sampleMat[:,jQOI])
+    figure.tight_layout()
+
+    #Plot POI-QOI correlation
+
+    #Plot QOI distribution
+
