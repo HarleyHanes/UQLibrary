@@ -57,7 +57,8 @@ class uqOptions:
 class model:
     #Model sets should be initialized with base parameter settings, covariance Matrix, and eval function that
     #   takes in a vector of POIs and outputs a vector of QOIs
-    def __init__(self,basePOIs=np.empty(0), cov=np.empty(0), evalFcn=np.empty(0), dist='unif',distParms='null'):
+    def __init__(self,basePOIs=np.empty(0), POInames = np.empty(0), QOInames= np. empty(0), cov=np.empty(0), \
+                 evalFcn=np.empty(0), dist='unif',distParms='null'):
         self.basePOIs=basePOIs
         if not isinstance(self.basePOIs,np.ndarray):                    #Confirm that basePOIs is a numpy array
             warnings.warn("model.basePOIs is not a numpy array")
@@ -67,15 +68,34 @@ class model:
                 raise Exception("Error! More than one dimension of size 1 detected for model.basePOIs, model.basePOIs must be dimension 1")
             else:                                                       #Issue a warning if dimensions were squeezed out of base POIs
                 warnings.warn("model.basePOIs was reduced a dimension 1 array. No entries were deleted.")
-        self.nPOIs=len(self.basePOIs)
+        self.nPOIs=self.basePOIs.size
+        #Assign POInames
+        self.POInames = POInames                                            #Assign POInames called
+        if (self.POInames.size != self.nPOIs) & (self.POInames.size !=0):   #Check that correct size if given
+            warnings.warn("POInames entered but the number of names does not match the number of POIs. Ignoring names.")
+            self.POInames=np.empty(0)
+        if self.POInames.size==0:                                           #If not given or incorrect size, number POIs
+            POInumbers=np.arange(0,self.nPOIs)
+            self.POInames=np.char.add('POI',POInumbers.astype('U'))
+        #Assign evaluation function and compute baseQOIs
         self.evalFcn=evalFcn
         self.baseQOIs=evalFcn(basePOIs)
         if not isinstance(self.baseQOIs,np.ndarray):                    #Confirm that baseQOIs is a numpy array
             warnings.warn("model.baseQOIs is not a numpy array")
         self.nQOIs=len(self.baseQOIs)
+        #Assign QOI names
+        self.QOInames = QOInames
+        if (self.QOInames.size !=self.nQOIs) & (self.QOInames.size !=0):    #Check names if given match number of QOIs
+            warnings.warn("QOInames entered but the number of names does not match the number of QOIs. Ignoring names.")
+            self.QOInames = np.empty(0)
+        if self.QOInames.size==0:                                 #If not given or incorrect size, number QOIs
+            QOInumbers = np.arange(0, self.nQOIs)
+            self.QOInames = np.char.add('QOI', QOInumbers.astype('U'))
+        #Assign covariance matrix
         self.cov=cov
-        if self.cov.size!=0 and np.shape(self.cov)!=(self.nPOIs,self.nPOIs):
+        if self.cov.size!=0 and np.shape(self.cov)!=(self.nPOIs,self.nPOIs): #Check correct sizing
             raise Exception("Error! model.cov is not an nPOI x nPOI array")
+        #Assign distributions
         self.dist = dist                        #String identifying sampling distribution for parameters
                                                 #       Supported distributions: unif, normal, exponential, beta, inverseCDF
         if isinstance(distParms,str):
@@ -354,31 +374,45 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
     #Reduce Sample number
     plotPoints=range(0,int(sampleMat.shape[0]), int(sampleMat.shape[0]/plotOptions.nPoints))
     #Plot POI-POI correlation and distributions
-    figure, axes=plt.subplots(nrows=model.nPOIs, ncols= model.nPOIs)
+    figure, axes=plt.subplots(nrows=model.nPOIs, ncols= model.nPOIs, squeeze=False)
     for iPOI in range(0,model.nPOIs):
         for jPOI in range(0,iPOI+1):
-            print(iPOI)
-            print(jPOI)
             if iPOI==jPOI:
                 n, bins, patches = axes[iPOI, jPOI].hist(sampleMat[:,iPOI])
             else:
                 axes[iPOI, jPOI].plot(sampleMat[plotPoints,iPOI], sampleMat[plotPoints,jPOI],'b*')
+            if jPOI==0:
+                axes[iPOI,jPOI].set_ylabel(model.POInames[iPOI])
+            if iPOI==model.nPOIs-1:
+                axes[iPOI,jPOI].set_xlabel(model.POInames[jPOI])
+            if model.nPOIs==1:
+                axes[iPOI,jPOI].set_ylabel('Instances')
     figure.tight_layout()
     #Plot QOI-QOI correlationa and distributions
-    figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nQOIs)
+    figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nQOIs, squeeze=False)
     for iQOI in range(0,model.nQOIs):
         for jQOI in range(0,iQOI+1):
             if iQOI==jQOI:
                 axes[iQOI, jQOI].hist([evalMat[:,iQOI]])
             else:
                 axes[iQOI, jQOI].plot(evalMat[plotPoints,iQOI], evalMat[plotPoints,jQOI],'b*')
+            if jQOI==0:
+                axes[iQOI,jQOI].set_ylabel(model.QOInames[iQOI])
+            if iQOI==model.nQOIs-1:
+                axes[iQOI,jQOI].set_xlabel(model.QOInames[jQOI])
+            if model.nQOIs==1:
+                axes[iQOI,jQOI].set_ylabel('Instances')
     figure.tight_layout()
 
     #Plot POI-QOI correlation
-    figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nPOIs)
+    figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nPOIs, squeeze=False)
     for iQOI in range(0,model.nQOIs):
         for jPOI in range(0, model.nPOIs):
             axes[iQOI, jPOI].plot(sampleMat[plotPoints,jPOI], evalMat[plotPoints,iQOI],'b*')
+            if jPOI==0:
+                axes[iQOI,jPOI].set_ylabel(model.QOInames[iQOI])
+            if iQOI==model.nQOIs-1:
+                axes[iQOI,jPOI].set_xlabel(model.POInames[jPOI])
     #Display all figures
     plt.show()
 

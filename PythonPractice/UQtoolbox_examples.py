@@ -48,6 +48,8 @@ def GetExample(example, **kwargs):
                          cov=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
                                        [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
                                        [0.4021, -2.4078, 3.0493]]) * (10 ** 3),
+                         POInames=np.array(["\\alpha_1", "\\alpha_{11}", "\\alpha_{111}"]),
+                         QOInames=np.array(["x=.8", "x=.80001"]),
                          dist="unif")  # Use uniform sampling of +-20% nominal value
         model.distParms = np.array([[.8, .8, .8], [1.2, 1.2, 1.2]]) * model.basePOIs
         #model.distParms = np.array([[.999999, .999999, .999999], [1.000001, 1.000001, 1.000001]]) * model.basePOIs
@@ -72,7 +74,9 @@ def GetExample(example, **kwargs):
                          distParms=np.array([[1, 1, 1], [1000, 100, 10]])
                          )
         options.gsa=uq.gsaOptions()
-
+    elif example.lower() == 'copper rod':
+        model = uq.model(evalFcn=RodTemperature,
+                         basePOIs=4.01)
     else:
         raise Exception("Unrecognized Example Type")
 

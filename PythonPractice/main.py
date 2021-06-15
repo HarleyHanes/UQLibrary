@@ -38,9 +38,9 @@ def main():
     #
     # # [model, options] = uqExamples.GetExample('linear product')
     #
-    [model, options] = uqExamples.GetExample('integrated helmholtz')
+    #[model, options] = uqExamples.GetExample('integrated helmholtz')
     #f
-    # # [model, options] = uqExamples.GetExample('linear')
+    [model, options] = uqExamples.GetExample('linear')
     #
     # [model, options] = uqExamples.GetExample('trial function')
     #
