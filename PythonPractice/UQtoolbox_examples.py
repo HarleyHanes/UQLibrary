@@ -21,7 +21,7 @@ def GetExample(example, **kwargs):
         model = uq.model(evalFcn=lambda params: linear_function(baseEvalPoints, params),
                          basePOIs=np.array([1, 1]),
                          cov=np.array([[1, 0], [0, 1]]),
-                         dist='unif',
+                         dist='uniform',
                          distParms=np.array([[0], [1]])*np.array([1, 1])
                          #distParms=np.array([[.9999999999], [1.0000000001]])*np.array([1, 1])
                          )
@@ -39,7 +39,7 @@ def GetExample(example, **kwargs):
                          cov=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
                                        [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
                                        [0.4021, -2.4078, 3.0493]]) * (10 ** 3),
-                         dist='unif')  # Use uniform sampling of +-20% nominal value
+                         dist='uniform')  # Use uniform sampling of +-20% nominal value
         model.distParms = np.array([[.8, .8, .8], [1.2, 1.2, 1.2]]) * model.basePOIs
         options.gsa = uq.gsaOptions(nSamp=10000)  # Keep normal sampling but reduce sample size to 100
     elif example.lower() == 'integrated helmholtz':
@@ -50,33 +50,53 @@ def GetExample(example, **kwargs):
                                        [0.4021, -2.4078, 3.0493]]) * (10 ** 3),
                          POInames=np.array(["\\alpha_1", "\\alpha_{11}", "\\alpha_{111}"]),
                          QOInames=np.array(["x=.8", "x=.80001"]),
-                         dist="unif")  # Use uniform sampling of +-20% nominal value
+                         dist="uniform")  # Use uniform sampling of +-20% nominal value
         model.distParms = np.array([[.8, .8, .8], [1.2, 1.2, 1.2]]) * model.basePOIs
         #model.distParms = np.array([[.999999, .999999, .999999], [1.000001, 1.000001, 1.000001]]) * model.basePOIs
         options.gsa = uq.gsaOptions()  # Use default number of samples
     elif example.lower() == 'linear product':  # Linear product example taken from Homma1996
         model = uq.model(evalFcn=LinearProd,
                          basePOIs=np.array([.5, .5, .5, .5, .5]),
-                         dist="unif",
+                         dist="uniform",
                          distParms=np.array([[0, 0, 0, 0, 0], [1, 1, 1, 1, 1]]))
         options.gsa = uq.gsaOptions()  # Use default number of samples
     elif example.lower() == 'ishigami':
         model = uq.model(evalFcn=Ishigami,
                          basePOIs=np.array([0, 0, 0]),
-                         dist="unif",
+                         dist="uniform",
                          distParms=np.array([[-math.pi, -math.pi, -math.pi], [math.pi, math.pi, math.pi]]))
         options.lsa=uq.lsaOptions(method='finite', xDelta=10**(-6))
         options.gsa=uq.gsaOptions()   # Use default number of samples
     elif example.lower() == 'trial function':
         model = uq.model(evalFcn=TrialFunction,
                          basePOIs=np.array([1, 1, 1]),
-                         dist="unif",
+                         dist="uniform",
                          distParms=np.array([[1, 1, 1], [1000, 100, 10]])
                          )
         options.gsa=uq.gsaOptions()
-    elif example.lower() == 'copper rod':
-        model = uq.model(evalFcn=RodTemperature,
-                         basePOIs=4.01)
+    elif example.lower() == 'portfolio (normal)':
+        model=uq.model(evalFcn=lambda params: Portfolio(params, np.array([2, 1])),
+                       basePOIs=np.array([0, 0]),
+                       dist="normal",
+                       distParms=np.array([[0, 0], [1, 3]]))
+        options.gsa=uq.gsaOptions()
+    elif example.lower() == 'portfolio (uniform)':
+        model=uq.model(evalFcn=lambda params: Portfolio(params, np.array([2, 1])),
+                       basePOIs=np.array([0, 0]),
+                       dist="uniform",
+                       distParms=np.array([[-np.sqrt(12)/2, -3], [np.sqrt(12)/2, 3]]))
+        options.gsa=uq.gsaOptions()
+    elif example.lower() == 'aluminum rod (uniform)':
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([45,46])),
+                         basePOIs=np.array([-18.4, .00191]),
+                         dist="uniform")
+        options.gsa=uq.gsaOptions()
+    elif example.lower() == 'aluminum rod (normal)':
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([45])),
+                         basePOIs=np.array([-18.4, .00191]),
+                         dist="normal",
+                         distParms=np.array([[-18.4, .00191], [.16*((-18.4)**2)/12, .16*(.00191**2)/12]]))
+        options.gsa=uq.gsaOptions()
     else:
         raise Exception("Unrecognized Example Type")
 
@@ -133,3 +153,34 @@ def TrialFunction(params):
         return np.array([params[0]+params[1]*(params[2]**2)])
     elif params.ndim == 2:
         return params[:, 0]+params[:, 1]*(params[:, 2]**2)
+def Portfolio(params,c):
+    if params.ndim == 1:
+        return np.array([c[0]*params[0]+c[1]*params[1]])
+    elif params.ndim == 2:
+        return c[0]*params[:, 0]+c[1]*params[:, 1]
+def HeatRod(params,x):
+    #Set or load paramters
+    Tamb=21.19
+    a=.95
+    b=.95
+    L=70
+    k=2.37
+    if params.ndim==1:
+        Phi=params[0]
+        h=params[1]
+    elif params.ndim==2:
+        Phi=params[:,0]
+        h=params[:,1]
+    #Compute intermediates
+    gamma=np.sqrt(2*(a+b)*h/(a*b*k))
+    c1=-Phi/(k*gamma)*(np.exp(gamma*L)*(h+k*gamma)/(np.exp(-gamma*L)*(h-k*gamma)+np.exp(gamma*L)*(h+k*gamma)))
+    c2=Phi/(k*gamma)+c1
+    #Compute temperature
+    gx = np.outer(gamma, x)
+    if (gx.shape[0] != 1 and gx.shape[1] == 1) or (gx.shape[1] != 1 and gx.shape[0] == 1):
+        gx = gx.squeeze()
+    if gx.ndim == 2 and c1.ndim == 1:
+        c1 = c1[:, np.newaxis]
+        c2 = c2[:, np.newaxis]
+    T = c1*np.exp(-gx)+c2*np.exp(gx)+Tamb
+    return T

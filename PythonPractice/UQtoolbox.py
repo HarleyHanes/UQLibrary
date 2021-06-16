@@ -9,6 +9,7 @@ import numpy as np
 import sys
 import warnings
 import matplotlib.pyplot as plt
+import scipy.integrate as integrate
 #import seaborne as seaborne
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Class Definitions----------------------------------------
@@ -99,9 +100,9 @@ class model:
         self.dist = dist                        #String identifying sampling distribution for parameters
                                                 #       Supported distributions: unif, normal, exponential, beta, inverseCDF
         if isinstance(distParms,str):
-            if self.dist.lower()=='unif':
+            if self.dist.lower()=='uniform':
                 self.distParms=[[.8],[1.2]]*np.ones((2,self.nPOIs))*self.basePOIs
-            elif self.dist.lower()=='norm':
+            elif self.dist.lower()=='normal':
                 if cov.size()==0:
                     self.distParms=[[1],[.2]]*np.ones((2,self.nPOIs))*self.basePOIs
                 else:
@@ -338,10 +339,12 @@ def CalculateSobol(fA, fB, fAB, fD):
     else:
         for iQOI in range(0,nQOIs):
             #Calculate 1st order parameter effects
-            sobolBase[iQOI,:]=1/(nSamp)*(np.sum(fAB[:,:,iQOI]*fA[:, [iQOI]],axis=0)-np.sum(fA[:,iQOI]*fB[:,iQOI],axis=0))/(nSamp*fDvar[iQOI])
+            sobolBase[iQOI,:]=(np.sum(fAB[:,:,iQOI]*fA[:, [iQOI]],axis=0)-np.sum(fA[:,iQOI]*fB[:,iQOI],axis=0))/(nSamp*fDvar[iQOI])
             #Caclulate 2nd order parameter effects
             sobolTot[iQOI,:]=(np.sum(fA[:,iQOI]**2,axis=0)-2*np.sum(fA[:, [iQOI]]*fAB[:,:,iQOI],axis=0)\
                                           +np.sum(fAB[:,:,iQOI]**2,axis=0))/(2*nSamp*fDvar[iQOI])
+    print(sobolBase.shape)
+    print(sobolTot.shape)
 
 
     return sobolBase, sobolTot
@@ -349,9 +352,9 @@ def CalculateSobol(fA, fB, fAB, fD):
 ##--------------------------------------GetSampDist----------------------------------------------------
 def GetSampDist(model, gsaOptions):
     # Determine Sample Function- Currently only 1 distribution type can be defined for all parameters
-    if model.dist.lower() == 'norm':  # Normal Distribution
-        sampDist = lambda nSamp: np.random.randn(nSamp,model.nPOIs)*np.sqrt(np.diag(model.cov))+model.basePOIs
-    elif model.dist.lower() == 'unif':  # uniform distribution
+    if model.dist.lower() == 'normal':  # Normal Distribution
+        sampDist = lambda nSamp: np.random.randn(nSamp,model.nPOIs)*np.sqrt(model.distParms[[1], :]) + model.distParms[[0], :]
+    elif model.dist.lower() == 'uniform':  # uniform distribution
         sampDist = lambda nSamp: model.distParms[[0],:]+(model.distParms[[1],:]-model.distParms[[0],:])\
                                  *np.random.uniform(0,1,size=(nSamp,model.nPOIs))
     elif model.dist.lower() == 'exponential': # exponential distribution
@@ -378,7 +381,7 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
     for iPOI in range(0,model.nPOIs):
         for jPOI in range(0,iPOI+1):
             if iPOI==jPOI:
-                n, bins, patches = axes[iPOI, jPOI].hist(sampleMat[:,iPOI])
+                n, bins, patches = axes[iPOI, jPOI].hist(sampleMat[:,iPOI], bins=20)
             else:
                 axes[iPOI, jPOI].plot(sampleMat[plotPoints,iPOI], sampleMat[plotPoints,jPOI],'b*')
             if jPOI==0:
@@ -393,7 +396,7 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
     for iQOI in range(0,model.nQOIs):
         for jQOI in range(0,iQOI+1):
             if iQOI==jQOI:
-                axes[iQOI, jQOI].hist([evalMat[:,iQOI]])
+                axes[iQOI, jQOI].hist([evalMat[:,iQOI]], bins=20)
             else:
                 axes[iQOI, jQOI].plot(evalMat[plotPoints,iQOI], evalMat[plotPoints,jQOI],'b*')
             if jQOI==0:
