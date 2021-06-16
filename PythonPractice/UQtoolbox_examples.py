@@ -6,7 +6,6 @@ import UQtoolbox as uq
 import numpy as np
 import math as math
 
-
 def GetExample(example, **kwargs):
     # Master function for selecting an example using a corresponding string
     # Inputs: example- string that corresponds to the desired model
@@ -48,7 +47,7 @@ def GetExample(example, **kwargs):
                          cov=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
                                        [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
                                        [0.4021, -2.4078, 3.0493]]) * (10 ** 3),
-                         POInames=np.array(["\\alpha_1", "\\alpha_{11}", "\\alpha_{111}"]),
+                         POInames=np.array(["alpha_1", "alpha11", "alpha111"]),
                          QOInames=np.array(["x=.8", "x=.80001"]),
                          dist="uniform")  # Use uniform sampling of +-20% nominal value
         model.distParms = np.array([[.8, .8, .8], [1.2, 1.2, 1.2]]) * model.basePOIs
@@ -85,17 +84,21 @@ def GetExample(example, **kwargs):
                        basePOIs=np.array([0, 0]),
                        dist="uniform",
                        distParms=np.array([[-np.sqrt(12)/2, -3], [np.sqrt(12)/2, 3]]))
-        options.gsa=uq.gsaOptions()
+        options.plot.path = '..\\Figures\\AluminumRod(Normal)'
     elif example.lower() == 'aluminum rod (uniform)':
         model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([10, 65])),
                          basePOIs=np.array([-18.4, .00191]),
-                         dist="uniform")
-        options.gsa=uq.gsaOptions()
+                         dist="uniform",
+                         POInames=np.array(['Phi', 'h']),
+                         QOInames=np.array(['T(x=10)', 'T(x=65)']))
+        options.plot.path = '..\\Figures\\AluminumRod(Uniform)'
     elif example.lower() == 'aluminum rod (normal)':
         model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([10, 65])),
                          basePOIs=np.array([-18.4, .00191]),
                          dist="normal",
-                         distParms=np.array([[-18.4, .00191], [.16*((-18.4)**2)/12, .16*(.00191**2)/12]]))
+                         distParms=np.array([[-18.4, .00191], [.16*((-18.4)**2)/12, .16*(.00191**2)/12]]),
+                         POInames=np.array(['Phi', 'h']),
+                         QOInames=np.array(['T(x=10)', 'T(x=65)']))
         options.gsa=uq.gsaOptions()
     else:
         raise Exception("Unrecognized Example Type")

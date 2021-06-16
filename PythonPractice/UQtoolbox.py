@@ -10,6 +10,7 @@ import sys
 import warnings
 import matplotlib.pyplot as plt
 import scipy.integrate as integrate
+from tabulate import tabulate
 #import seaborne as seaborne
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Class Definitions----------------------------------------
@@ -40,17 +41,18 @@ class gsaOptions:
         pass
 #--------------------------------------plotOptions------------------------------------------------
 class plotOptions:
-    def __init__(self,run=True,nPoints=100):
+    def __init__(self,run=True,nPoints=200,path=False):
         self.run=run
         self.nPoints=nPoints
+        self.path=path
         pass
 #--------------------------------------uqOptions------------------------------------------------
 #   Class holding the above options subclasses
 class uqOptions:
-    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),samp=gsaOptions()):
+    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions()):
         self.lsa=lsa
         self.plot=plot
-        self.samp=samp
+        self.gsa=gsa
     pass
 
 ##-------------------------------------model------------------------------------------------------
@@ -168,6 +170,11 @@ def RunUQ(model, options):
     #Print Results
     PrintResults(results,model,options)
 
+    #Plot Samples
+    # Plot Sample Statistics
+    if options.plot.run:
+        PlotGSA(model, results.gsa.sampD, results.gsa.fD, options.plot)
+
     return results
 
 # Top order functions- These functions are the main functions for each component of our analysis they include,
@@ -206,9 +213,6 @@ def GSA(model, options):
     model=GetSampDist(model, options.gsa)
     #Make Distribution Samples and Calculate model results
     [fA, fB, fAB, fD, sampD] = GetSamples(model, options.gsa)
-    #Plot Sample Statistics
-    if options.plot.run:
-        PlotGSA(model, sampD, fD, options.plot)
     #Calculate Sobol Indices
     [sobolBase, sobolTot]=CalculateSobol(fA, fB, fAB, fD)
     return gsaResults(fD=fD, fAB=fAB, sampD= sampD, sobolBase=sobolBase, sobolTot=sobolTot)
@@ -216,14 +220,28 @@ def GSA(model, options):
 def PrintResults(results,model,options):
     # Print Results
     if options.lsa.run:
-        print("Base Parameters: " + str(model.basePOIs))
-        print("Base values: " + str(model.baseQOIs))
-        print("Jacobian: " + str(results.lsa.jac))
-        print("Relative Sensitivities: " + str(results.lsa.rsi))
-        print("Fisher Matrix: " + str(results.lsa.fisher))
+        print('\n Base POI Values')
+        print(tabulate([model.basePOIs], headers=model.POInames))
+        print('\n Base QOI Values')
+        print(tabulate([model.baseQOIs], headers=model.QOInames))
+        print('\n Sensitivity Indices')
+        print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.lsa.jac),1),
+              headers= np.append("",model.QOInames)))
+        print('\n Relative Sensitivity Indices')
+        print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.lsa.rsi),1),
+              headers= np.append("",model.QOInames)))
+        #print("Fisher Matrix: " + str(results.lsa.fisher))
     if options.gsa.run:
-        print("1st Order Sobol Indices: " + str(results.gsa.sobolBase))
-        print("Total Sobol Indices: " + str(results.gsa.sobolTot))
+        if model.nQOIs==1:
+            print('\n Sobol Indices for ' + model.QOInames)
+            print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1), results.gsa.sobolBase.reshape(model.nPOIs,1), \
+                                           results.gsa.sobolTot.reshape(model.nPOIs,1)), 1),
+                           headers=["", "1st Order", "Total Sensitivity"]))
+        else:
+            for iQOI in range(0,model.nQOIs):
+                print('\n Sobol Indices for '+ model.QOInames[iQOI])
+                print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.gsa.sobolBase[:,[iQOI]], \
+                    results.gsa.sobolTot[:,[iQOI]]),1), headers = ["", "1st Order", "Total Sensitivity"]))
 
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Support Functions----------------------------------------
@@ -389,6 +407,9 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
             if model.nPOIs==1:
                 axes[iPOI,jPOI].set_ylabel('Instances')
     figure.tight_layout()
+    if plotOptions.path:
+        plt.savefig(plotOptions.path+"\\POIcorrelation")
+
     #Plot QOI-QOI correlationa and distributions
     figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nQOIs, squeeze=False)
     for iQOI in range(0,model.nQOIs):
@@ -404,6 +425,8 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
             if model.nQOIs==1:
                 axes[iQOI,jQOI].set_ylabel('Instances')
     figure.tight_layout()
+    if plotOptions.path:
+        plt.savefig(plotOptions.path+"\\QOIcorrelation")
 
     #Plot POI-QOI correlation
     figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nPOIs, squeeze=False)
@@ -414,6 +437,8 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
                 axes[iQOI,jPOI].set_ylabel(model.QOInames[iQOI])
             if iQOI==model.nQOIs-1:
                 axes[iQOI,jPOI].set_xlabel(model.POInames[jPOI])
+    if plotOptions.path:
+        plt.savefig(plotOptions.path+"\\POI_QOIcorrelation")
     #Display all figures
     plt.show()
 
