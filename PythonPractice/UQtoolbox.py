@@ -339,12 +339,10 @@ def CalculateSobol(fA, fB, fAB, fD):
     else:
         for iQOI in range(0,nQOIs):
             #Calculate 1st order parameter effects
-            sobolBase[iQOI,:]=(np.sum(fAB[:,:,iQOI]*fA[:, [iQOI]],axis=0)-np.sum(fA[:,iQOI]*fB[:,iQOI],axis=0))/(nSamp*fDvar[iQOI])
+            sobolBase[iQOI,:]=np.sum(fB[:,[iQOI]]*(fAB[:,:,iQOI]-fA[:,[iQOI]]),axis=0)/(nSamp*fDvar[iQOI])
             #Caclulate 2nd order parameter effects
-            sobolTot[iQOI,:]=(np.sum(fA[:,iQOI]**2,axis=0)-2*np.sum(fA[:, [iQOI]]*fAB[:,:,iQOI],axis=0)\
-                                          +np.sum(fAB[:,:,iQOI]**2,axis=0))/(2*nSamp*fDvar[iQOI])
-    print(sobolBase.shape)
-    print(sobolTot.shape)
+            sobolTot[iQOI,:]= np.sum((fA[:,[iQOI]]-fAB[:,:,iQOI])**2,axis=0)/(2*nSamp*fDvar[iQOI])
+
 
 
     return sobolBase, sobolTot

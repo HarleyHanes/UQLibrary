@@ -40,7 +40,7 @@ def main():
     #
     #[model, options] = uqExamples.GetExample('integrated helmholtz')
     #f
-    [model, options] = uqExamples.GetExample('Aluminum Rod (uniform)')
+    [model, options] = uqExamples.GetExample('Aluminum Rod (normal)')
     #
     # [model, options] = uqExamples.GetExample('trial function')
     #

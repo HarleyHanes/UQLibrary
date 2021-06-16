@@ -87,12 +87,12 @@ def GetExample(example, **kwargs):
                        distParms=np.array([[-np.sqrt(12)/2, -3], [np.sqrt(12)/2, 3]]))
         options.gsa=uq.gsaOptions()
     elif example.lower() == 'aluminum rod (uniform)':
-        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([45,46])),
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([10, 65])),
                          basePOIs=np.array([-18.4, .00191]),
                          dist="uniform")
         options.gsa=uq.gsaOptions()
     elif example.lower() == 'aluminum rod (normal)':
-        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([45])),
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([10, 65])),
                          basePOIs=np.array([-18.4, .00191]),
                          dist="normal",
                          distParms=np.array([[-18.4, .00191], [.16*((-18.4)**2)/12, .16*(.00191**2)/12]]))
