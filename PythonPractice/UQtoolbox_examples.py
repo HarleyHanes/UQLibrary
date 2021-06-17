@@ -86,17 +86,19 @@ def GetExample(example, **kwargs):
                        distParms=np.array([[-np.sqrt(12)/2, -3], [np.sqrt(12)/2, 3]]))
         options.plot.path = '..\\Figures\\AluminumRod(Normal)'
     elif example.lower() == 'aluminum rod (uniform)':
-        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([10, 65])),
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([20, 55])),
                          basePOIs=np.array([-18.4, .00191]),
                          dist="uniform",
+                         distParms=np.array([[-18.4-(.1450*np.sqrt(3)), .00191-(1.4482*(10**(-5))*np.sqrt(3))],\
+                                             [-18.4+(.1450*np.sqrt(3)), .00191+(1.4482*(10**(-5))*np.sqrt(3))]]),
                          POInames=np.array(['Phi', 'h']),
                          QOInames=np.array(['T(x=10)', 'T(x=65)']))
         options.plot.path = '..\\Figures\\AluminumRod(Uniform)'
     elif example.lower() == 'aluminum rod (normal)':
-        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([10, 65])),
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([20, 55])),
                          basePOIs=np.array([-18.4, .00191]),
                          dist="normal",
-                         distParms=np.array([[-18.4, .00191], [.16*((-18.4)**2)/12, .16*(.00191**2)/12]]),
+                         distParms=np.array([[-18.4, .00191], [.1450**2, (1.4482*10**(-5))**2]]),
                          POInames=np.array(['Phi', 'h']),
                          QOInames=np.array(['T(x=10)', 'T(x=65)']))
         options.gsa=uq.gsaOptions()

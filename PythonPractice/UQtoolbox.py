@@ -240,8 +240,8 @@ def PrintResults(results,model,options):
         else:
             for iQOI in range(0,model.nQOIs):
                 print('\n Sobol Indices for '+ model.QOInames[iQOI])
-                print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.gsa.sobolBase[:,[iQOI]], \
-                    results.gsa.sobolTot[:,[iQOI]]),1), headers = ["", "1st Order", "Total Sensitivity"]))
+                print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.gsa.sobolBase[[iQOI],:].reshape(model.nPOIs,1), \
+                    results.gsa.sobolTot[[iQOI],:].reshape(model.nPOIs,1)),1), headers = ["", "1st Order", "Total Sensitivity"]))
 
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Support Functions----------------------------------------
