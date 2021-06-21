@@ -10,7 +10,9 @@ import sys
 import warnings
 import matplotlib.pyplot as plt
 import scipy.integrate as integrate
-from tabulate import tabulate
+from tabulate import tabulate                       #Used for printing tables to terminal
+import sobol                                        #Used for generating sobol sequences
+import SALib.sample as sample
 #import seaborne as seaborne
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Class Definitions----------------------------------------
@@ -41,7 +43,7 @@ class gsaOptions:
         pass
 #--------------------------------------plotOptions------------------------------------------------
 class plotOptions:
-    def __init__(self,run=True,nPoints=200,path=False):
+    def __init__(self,run=True,nPoints=400,path=False):
         self.run=run
         self.nPoints=nPoints
         self.path=path
@@ -128,9 +130,11 @@ class lsaResults:
 # Define class "gsaResults" which holds sobol analysis results
 class gsaResults:
     #
-    def __init__(self,sobolBase=np.empty, sobolTot=np.empty, fD=np.empty, fAB=np.empty, sampD=np.empty):
+    def __init__(self,sobolBase=np.empty, sobolTot=np.empty, fA=np.empty, fB=np.empty, fD=np.empty, fAB=np.empty, sampD=np.empty):
         self.sobolBase=sobolBase
         self.sobolTot=sobolTot
+        self.fA=fA
+        self.fB=fB
         self.fD=fD
         self.fAB=fAB
         self.sampD=sampD
@@ -215,7 +219,7 @@ def GSA(model, options):
     [fA, fB, fAB, fD, sampD] = GetSamples(model, options.gsa)
     #Calculate Sobol Indices
     [sobolBase, sobolTot]=CalculateSobol(fA, fB, fAB, fD)
-    return gsaResults(fD=fD, fAB=fAB, sampD= sampD, sobolBase=sobolBase, sobolTot=sobolTot)
+    return gsaResults(fD=fD, fA=fA, fB=fB, fAB=fAB, sampD= sampD, sobolBase=sobolBase, sobolTot=sobolTot)
 
 def PrintResults(results,model,options):
     # Print Results
@@ -225,15 +229,15 @@ def PrintResults(results,model,options):
         print('\n Base QOI Values')
         print(tabulate([model.baseQOIs], headers=model.QOInames))
         print('\n Sensitivity Indices')
-        print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.lsa.jac),1),
+        print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.lsa.jac.reshape(model.nPOIs,model.nQOIs)),1),
               headers= np.append("",model.QOInames)))
         print('\n Relative Sensitivity Indices')
-        print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.lsa.rsi),1),
+        print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.lsa.rsi.reshape(model.nPOIs,model.nQOIs)),1),
               headers= np.append("",model.QOInames)))
         #print("Fisher Matrix: " + str(results.lsa.fisher))
     if options.gsa.run:
         if model.nQOIs==1:
-            print('\n Sobol Indices for ' + model.QOInames)
+            print('\n Sobol Indices for ' + model.QOInames[0])
             print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1), results.gsa.sobolBase.reshape(model.nPOIs,1), \
                                            results.gsa.sobolTot.reshape(model.nPOIs,1)), 1),
                            headers=["", "1st Order", "Total Sensitivity"]))
@@ -301,8 +305,11 @@ def GetSamples(model,gsaOptions):
     sampDist = model.sampDist
     evalFcn = model.evalFcn
     # Make 2 POI sample matrices with nSamp samples each
-    sampA = sampDist(nSamp)
-    sampB = sampDist(nSamp)
+    if model.dist.lower()=='uniform':
+        (sampA, sampB)=sampDist(nSamp);                                     #Get both A and B samples so no repeated values
+    else:
+        sampA = sampDist(nSamp)
+        sampB = sampDist(nSamp)
     # Calculate matrices of QOI values for each POI sample matrix
     fA = evalFcn(sampA).reshape([nSamp, model.nQOIs])  # nSamp x nQOI out matrix from A
     fB = evalFcn(sampB).reshape([nSamp, model.nQOIs])  # nSamp x nQOI out matrix from B
@@ -349,18 +356,17 @@ def CalculateSobol(fA, fB, fAB, fD):
     sobolTot=np.empty((nQOIs, nPOIs))
     if nQOIs==1:
         #Calculate 1st order parameter effects
-        sobolBase=np.sum(fB*(fAB-fA), axis=0)/(nSamp*fDvar)
+        sobolBase=np.mean(fB*(fAB-fA), axis=0)/(fDvar)
 
         #Caclulate 2nd order parameter effects
-        sobolTot=np.sum((fA-fAB)**2, axis=0)/(2*nSamp*fDvar)
+        sobolTot=np.mean((fA-fAB)**2, axis=0)/(2*fDvar)
 
     else:
         for iQOI in range(0,nQOIs):
             #Calculate 1st order parameter effects
-            sobolBase[iQOI,:]=np.sum(fB[:,[iQOI]]*(fAB[:,:,iQOI]-fA[:,[iQOI]]),axis=0)/(nSamp*fDvar[iQOI])
+            sobolBase[iQOI,:]=np.mean(fB[:,[iQOI]]*(fAB[:,:,iQOI]-fA[:,[iQOI]]),axis=0)/fDvar[iQOI]
             #Caclulate 2nd order parameter effects
-            sobolTot[iQOI,:]= np.sum((fA[:,[iQOI]]-fAB[:,:,iQOI])**2,axis=0)/(2*nSamp*fDvar[iQOI])
-
+            sobolTot[iQOI,:]= np.mean((fA[:,[iQOI]]-fAB[:,:,iQOI])**2,axis=0)/(2*fDvar[iQOI])
 
 
     return sobolBase, sobolTot
@@ -371,8 +377,8 @@ def GetSampDist(model, gsaOptions):
     if model.dist.lower() == 'normal':  # Normal Distribution
         sampDist = lambda nSamp: np.random.randn(nSamp,model.nPOIs)*np.sqrt(model.distParms[[1], :]) + model.distParms[[0], :]
     elif model.dist.lower() == 'uniform':  # uniform distribution
-        sampDist = lambda nSamp: model.distParms[[0],:]+(model.distParms[[1],:]-model.distParms[[0],:])\
-                                 *np.random.uniform(0,1,size=(nSamp,model.nPOIs))
+        # doubleParms=np.concatenate(model.distParms, model.distParms, axis=1)
+        sampDist = lambda nSamp: SaltelliSample(nSamp,model.distParms)
     elif model.dist.lower() == 'exponential': # exponential distribution
         sampDist = lambda nSamp: np.random.exponential(model.distParms,size=(nSamp,model.nPOIs))
     elif model.dist.lower() == 'beta': # beta distribution
@@ -391,13 +397,15 @@ def GetSampDist(model, gsaOptions):
 #
 def PlotGSA(model, sampleMat, evalMat, plotOptions):
     #Reduce Sample number
-    plotPoints=range(0,int(sampleMat.shape[0]), int(sampleMat.shape[0]/plotOptions.nPoints))
+    #plotPoints=range(0,int(sampleMat.shape[0]), int(sampleMat.shape[0]/plotOptions.nPoints))
+    #Make the number of sample points to survey
+    plotPoints=np.linspace(start=0, stop=sampleMat.shape[0]-1, num=plotOptions.nPoints, dtype=int)
     #Plot POI-POI correlation and distributions
     figure, axes=plt.subplots(nrows=model.nPOIs, ncols= model.nPOIs, squeeze=False)
     for iPOI in range(0,model.nPOIs):
         for jPOI in range(0,iPOI+1):
             if iPOI==jPOI:
-                n, bins, patches = axes[iPOI, jPOI].hist(sampleMat[:,iPOI], bins=20)
+                n, bins, patches = axes[iPOI, jPOI].hist(sampleMat[:,iPOI], bins=41)
             else:
                 axes[iPOI, jPOI].plot(sampleMat[plotPoints,iPOI], sampleMat[plotPoints,jPOI],'b*')
             if jPOI==0:
@@ -415,7 +423,7 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
     for iQOI in range(0,model.nQOIs):
         for jQOI in range(0,iQOI+1):
             if iQOI==jQOI:
-                axes[iQOI, jQOI].hist([evalMat[:,iQOI]], bins=20)
+                axes[iQOI, jQOI].hist([evalMat[:,iQOI]], bins=41)
             else:
                 axes[iQOI, jQOI].plot(evalMat[plotPoints,iQOI], evalMat[plotPoints,jQOI],'b*')
             if jQOI==0:
@@ -442,3 +450,11 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
     #Display all figures
     plt.show()
 
+def SaltelliSample(nSamp,distParams):
+    nPOIs=distParams.shape[1]
+    baseSample=sobol.sample(dimension=nPOIs*2, n_points=nSamp, skip=1099)
+    baseA=baseSample[:,:nPOIs]
+    baseB=baseSample[:,nPOIs:2*nPOIs]
+    sampA=distParams[[0],:]+(distParams[[1],:]-distParams[[0],:])*baseA
+    sampB=distParams[[0],:]+(distParams[[1],:]-distParams[[0],:])*baseB
+    return (sampA, sampB)

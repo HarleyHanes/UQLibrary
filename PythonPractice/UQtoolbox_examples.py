@@ -77,31 +77,33 @@ def GetExample(example, **kwargs):
         model=uq.model(evalFcn=lambda params: Portfolio(params, np.array([2, 1])),
                        basePOIs=np.array([0, 0]),
                        dist="normal",
-                       distParms=np.array([[0, 0], [1, 3]]))
-        options.gsa=uq.gsaOptions()
+                       distParms=np.array([[0, 0], [1, 9]]))
+        options.gsa=uq.gsaOptions(nSamp = 100000)
     elif example.lower() == 'portfolio (uniform)':
         model=uq.model(evalFcn=lambda params: Portfolio(params, np.array([2, 1])),
                        basePOIs=np.array([0, 0]),
                        dist="uniform",
-                       distParms=np.array([[-np.sqrt(12)/2, -3], [np.sqrt(12)/2, 3]]))
-        options.plot.path = '..\\Figures\\AluminumRod(Normal)'
+                       distParms=np.array([[-np.sqrt(12)/2, -3*np.sqrt(3)], [np.sqrt(12)/2, 3*np.sqrt(3)]]))
+        options.plot.path = '..\\Figures\\Portfolio(Uniform)'
+        options.gsa=uq.gsaOptions(nSamp = 2**12)
     elif example.lower() == 'aluminum rod (uniform)':
-        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([20, 55])),
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([55])),
                          basePOIs=np.array([-18.4, .00191]),
                          dist="uniform",
                          distParms=np.array([[-18.4-(.1450*np.sqrt(3)), .00191-(1.4482*(10**(-5))*np.sqrt(3))],\
                                              [-18.4+(.1450*np.sqrt(3)), .00191+(1.4482*(10**(-5))*np.sqrt(3))]]),
                          POInames=np.array(['Phi', 'h']),
-                         QOInames=np.array(['T(x=10)', 'T(x=65)']))
+                         QOInames=np.array(['T(x=65)']))
         options.plot.path = '..\\Figures\\AluminumRod(Uniform)'
+        options.gsa = uq.gsaOptions(nSamp = 2**13)
     elif example.lower() == 'aluminum rod (normal)':
-        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([20, 55])),
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([55])),
                          basePOIs=np.array([-18.4, .00191]),
                          dist="normal",
                          distParms=np.array([[-18.4, .00191], [.1450**2, (1.4482*10**(-5))**2]]),
                          POInames=np.array(['Phi', 'h']),
-                         QOInames=np.array(['T(x=10)', 'T(x=65)']))
-        options.gsa=uq.gsaOptions()
+                         QOInames=np.array(['T(x=55)']))
+        options.gsa=uq.gsaOptions(nSamp = 10000)
     else:
         raise Exception("Unrecognized Example Type")
 
