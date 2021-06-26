@@ -13,6 +13,7 @@ import scipy.integrate as integrate
 from tabulate import tabulate                       #Used for printing tables to terminal
 import sobol                                        #Used for generating sobol sequences
 import SALib.sample as sample
+import scipy.stats as sct
 #import seaborne as seaborne
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Class Definitions----------------------------------------
@@ -51,10 +52,11 @@ class plotOptions:
 #--------------------------------------uqOptions------------------------------------------------
 #   Class holding the above options subclasses
 class uqOptions:
-    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions()):
+    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions(), print=True):
         self.lsa=lsa
         self.plot=plot
         self.gsa=gsa
+        self.print=print                        #Whether to print results to terminal
     pass
 
 ##-------------------------------------model------------------------------------------------------
@@ -172,10 +174,10 @@ def RunUQ(model, options):
         results.gsa = GSA(model, options)
 
     #Print Results
-    PrintResults(results,model,options)
+    if options.print:
+        PrintResults(results,model,options)
 
     #Plot Samples
-    # Plot Sample Statistics
     if options.plot.run:
         PlotGSA(model, results.gsa.sampD, results.gsa.fD, options.plot)
 
@@ -305,7 +307,7 @@ def GetSamples(model,gsaOptions):
     sampDist = model.sampDist
     evalFcn = model.evalFcn
     # Make 2 POI sample matrices with nSamp samples each
-    if model.dist.lower()=='uniform':
+    if model.dist.lower()=='uniform' or model.dist.lower()=='saltellinormal':
         (sampA, sampB)=sampDist(nSamp);                                     #Get both A and B samples so no repeated values
     else:
         sampA = sampDist(nSamp)
@@ -376,6 +378,8 @@ def GetSampDist(model, gsaOptions):
     # Determine Sample Function- Currently only 1 distribution type can be defined for all parameters
     if model.dist.lower() == 'normal':  # Normal Distribution
         sampDist = lambda nSamp: np.random.randn(nSamp,model.nPOIs)*np.sqrt(model.distParms[[1], :]) + model.distParms[[0], :]
+    elif model.dist.lower() == 'saltellinormal':
+        sampDist = lambda nSamp: SaltelliNormal(nSamp, model.distParms)
     elif model.dist.lower() == 'uniform':  # uniform distribution
         # doubleParms=np.concatenate(model.distParms, model.distParms, axis=1)
         sampDist = lambda nSamp: SaltelliSample(nSamp,model.distParms)
@@ -458,3 +462,40 @@ def SaltelliSample(nSamp,distParams):
     sampA=distParams[[0],:]+(distParams[[1],:]-distParams[[0],:])*baseA
     sampB=distParams[[0],:]+(distParams[[1],:]-distParams[[0],:])*baseB
     return (sampA, sampB)
+
+def SaltelliNormal(nSamp, distParms):
+    nPOIs=distParms.shape[1]
+    baseSample=sobol.sample(dimension=nPOIs*2, n_points=nSamp, skip=1099)
+    baseA=baseSample[:,:nPOIs]
+    baseB=baseSample[:,nPOIs:2*nPOIs]
+    transformA=sct.norm.ppf(baseA)
+    transformB=sct.norm.ppf(baseB)
+    sampA=transformA*np.sqrt(distParms[[1], :]) + distParms[[0], :]
+    sampB=transformB*np.sqrt(distParms[[1], :]) + distParms[[0], :]
+    return (sampA, sampB)
+
+def TestAccuracy(model,options,nSamp):
+    baseSobol=np.empty((nSamp.size, model.nPOIs))
+    totalSobol=np.empty((nSamp.size, model.nPOIs))
+    options.plot.run=False
+    options.lsa.run=False
+    options.print=False
+    for iSamp in range(0,nSamp.size):
+        options.gsa.nSamp=nSamp[iSamp]
+        results=RunUQ(model,options)
+        baseSobol[iSamp,:]=results.gsa.sobolBase
+        totalSobol[iSamp,:]=results.gsa.sobolTot
+    figure, axes=plt.subplots(nrows=2, ncols= model.nPOIs, squeeze=False)
+    for iPOI in np.arange(0,model.nPOIs):
+        axes[0, iPOI].plot(nSamp, baseSobol[:,iPOI], 'bs')
+        axes[1, iPOI].plot(nSamp, totalSobol[:,iPOI], 'bs')
+        axes[0,iPOI].set_title(model.POInames[iPOI])
+    axes[0,0].set_ylabel('First Order Sobol')
+    axes[1,0].set_ylabel('Total Sobol')
+    axes[1,0].set_xlabel('Number of Samples')
+    axes[1,1].set_xlabel('Number of Samples')
+    figure.tight_layout()
+    if options.plot.path:
+        plt.savefig(options.plot.path+"\\SobolConvergence")
+    plt.show()
+    return (baseSobol,totalSobol)
