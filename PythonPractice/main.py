@@ -33,11 +33,11 @@ def main():
 
 
     # # Get model and options object from Example set
-    # # [model, options] = uqExamples.GetExample('ishigami')
+    # [model, options] = uqExamples.GetExample('ishigami (normal)')
     #
     # # [model, options] = uqExamples.GetExample('linear product')
     #
-    [model, options] = uqExamples.GetExample('aluminum rod (uniform)')
+    [model, options] = uqExamples.GetExample('aluminum rod (saltelli normal)')
     #options.plot.nPoints=options.gsa.nSamp
     #f
     # [model, options] = uqExamples.GetExample('aluminum rod (normal)')
@@ -45,8 +45,8 @@ def main():
     # [model, options] = uqExamples.GetExample('trial function')
     #
     # # Run UQ package
-    (baseSobol,totalSobol)= uq.TestAccuracy(model, options, np.arange(start=10000, stop=500000, step=10000))
-    #results = uq.RunUQ(model, options)
+    # (baseSobol,totalSobol)= uq.TestAccuracy(model, options, np.arange(start=10000, stop=200000, step=5000))
+    results = uq.RunUQ(model, options)
     #
     # plt.plot(results.gsa.sampD[:450,0], results.gsa.sampD[:450,1],'rs')
     # plt.plot(results.gsa.sampD[options.gsa.nSamp:options.gsa.nSamp+450,0], results.gsa.sampD[options.gsa.nSamp:options.gsa.nSamp+450,1],'bo')

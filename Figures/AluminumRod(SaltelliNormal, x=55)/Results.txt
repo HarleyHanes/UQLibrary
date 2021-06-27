@@ -1,0 +1,29 @@
+Sensitivity results for nSamp=200000
+
+ Base POI Values
+  Phi        h
+-----  -------
+-18.4  0.00191
+
+ Base QOI Values
+  T(x=55)
+---------
+  27.5205
+
+ Sensitivity Indices
+          T(x=55)
+---  ------------
+Phi     -0.344052
+h    -7396.74
+
+ Relative Sensitivity Indices
+       T(x=55)
+---  ---------
+Phi   0.23003
+h    -0.513354
+
+ Sobol Indices for T(x=55)
+       1st Order    Total Sensitivity
+---  -----------  -------------------
+Phi     0.174556             0.178212
+h       0.821368             0.821933

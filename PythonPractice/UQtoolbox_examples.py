@@ -60,13 +60,20 @@ def GetExample(example, **kwargs):
                          dist="uniform",
                          distParms=np.array([[0, 0, 0, 0, 0], [1, 1, 1, 1, 1]]))
         options.gsa = uq.gsaOptions()  # Use default number of samples
-    elif example.lower() == 'ishigami':
+    elif example.lower() == 'ishigami (uniform)':
         model = uq.model(evalFcn=Ishigami,
                          basePOIs=np.array([0, 0, 0]),
                          dist="uniform",
                          distParms=np.array([[-math.pi, -math.pi, -math.pi], [math.pi, math.pi, math.pi]]))
         options.lsa=uq.lsaOptions(method='finite', xDelta=10**(-6))
-        options.gsa=uq.gsaOptions()   # Use default number of samples
+        options.gsa=uq.gsaOptions(nSamp= 100000)   # Use default number of samples
+    elif example.lower() == 'ishigami (normal)':
+        model = uq.model(evalFcn=Ishigami,
+                         basePOIs=np.array([0, 0, 0]),
+                         dist="SaltelliNormal",
+                         distParms=np.array([[0, 0, 0], [(2*math.pi)**2/12, (2*math.pi)**2/12, (2*math.pi)**2/12]]))
+        options.lsa=uq.lsaOptions(method='finite', xDelta=10**(-6))
+        options.gsa=uq.gsaOptions(nSamp= 100000)   # Use default number of samples
     elif example.lower() == 'trial function':
         model = uq.model(evalFcn=TrialFunction,
                          basePOIs=np.array([1, 1, 1]),
@@ -85,17 +92,17 @@ def GetExample(example, **kwargs):
                        basePOIs=np.array([0, 0]),
                        dist="uniform",
                        distParms=np.array([[-np.sqrt(12)/2, -3*np.sqrt(3)], [np.sqrt(12)/2, 3*np.sqrt(3)]]))
-        options.plot.path = '..\\Figures\\Portfolio(Uniform)'
+        options.path = '..\\Figures\\Portfolio(Uniform)'
         options.gsa=uq.gsaOptions(nSamp = 2**12)
     elif example.lower() == 'aluminum rod (uniform)':
-        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([5])),
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([55])),
                          basePOIs=np.array([-18.4, .00191]),
                          dist="uniform",
                          distParms=np.array([[-18.4-(.1450*np.sqrt(3)), .00191-(1.4482*(10**(-5))*np.sqrt(3))],\
                                              [-18.4+(.1450*np.sqrt(3)), .00191+(1.4482*(10**(-5))*np.sqrt(3))]]),
                          POInames=np.array(['Phi', 'h']),
-                         QOInames=np.array(['T(x=5)']))
-        options.plot.path = '..\\Figures\\AluminumRod(Uniform, x=5)'
+                         QOInames=np.array(['T(x=55)']))
+        options.path = '..\\Figures\\AluminumRod(Uniform, x=55)'
         options.gsa = uq.gsaOptions(nSamp = 500000)
     elif example.lower() == 'aluminum rod (normal)':
         model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([55])),
@@ -104,17 +111,17 @@ def GetExample(example, **kwargs):
                          distParms=np.array([[-18.4, .00191], [.1450**2, (1.4482*10**(-5))**2]]),
                          POInames=np.array(['Phi', 'h']),
                          QOInames=np.array(['T(x=55)']))
-        options.plot.path = '..\\Figures\\AluminumRod(Normal)'
+        options.path = '..\\Figures\\AluminumRod(Normal)'
         options.gsa=uq.gsaOptions(nSamp = 100000000)
     elif example.lower() == 'aluminum rod (saltelli normal)':
-        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([5])),
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([55])),
                          basePOIs=np.array([-18.4, .00191]),
                          dist="SaltelliNormal",
                          distParms=np.array([[-18.4, .00191], [.1450**2, (1.4482*10**(-5))**2]]),
                          POInames=np.array(['Phi', 'h']),
-                         QOInames=np.array(['T(x=5)']))
-        options.plot.path = '..\\Figures\\AluminumRod(SaltelliNormal, x=5)'
-        options.gsa=uq.gsaOptions(nSamp = 700000)
+                         QOInames=np.array(['T(x=55)']))
+        options.path = '..\\Figures\\AluminumRod(SaltelliNormal, x=55)'
+        options.gsa=uq.gsaOptions(nSamp = 200000)
     else:
         raise Exception("Unrecognized Example Type")
 
