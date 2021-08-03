@@ -24,17 +24,20 @@ import scipy.stats as sct
 #   -Subclasses: lsaOptions, plotOptions, gsaOptions
 #--------------------------------------lsaOptions------------------------------------------------
 class lsaOptions:
-    def __init__(self,run=True,  xDelta=10**(-12), method='complex', scale='y'):
+    def __init__(self,run=True,  xDelta=10**(-12), method='complex', scale='y', subspaceRelTol=.001):
         self.run=run                              #Whether to run lsa (True or False)
         self.xDelta=xDelta                        #Input perturbation for calculating jacobian
         self.scale=scale                          #scale can be y, n, or both for outputing scaled, unscaled, or both
         self.method=method                        #method used for approximating derivatives
+        self.subspaceRelTol=subspaceRelTol
         if not self.scale.lower() in ('y','n','both'):
             raise Exception('Error! Unrecgonized scaling output, please enter y, n, or both')
         if not self.method.lower() in ('complex','finite'):
             raise Exception('Error! unrecognized derivative approx method. Use complex or finite')
         if self.xDelta<0 or not isinstance(self.xDelta,float):
             raise Exception('Error! Non-compatibale xDelta, please use a positive floating point number')
+        if self.subspaceRelTol<0 or self.subspaceRelTol>1 or not isinstance(self.xDelta,float):
+            raise Exception('Error! Non-compatibale xDelta, please use a positive floating point number less than 1')
     pass
 #--------------------------------------gsaOptions------------------------------------------------
 class gsaOptions:
@@ -176,7 +179,11 @@ def RunUQ(model, options):
 
     #Run Global Sensitivity Analysis
     if options.gsa.run:
-        results.gsa = GSA(model, options)
+        if options.lsa.run:
+            #Use a reduced model if it was caluclated
+            results.gsa=GSA(results.lsa.reducedModel, options)
+        else:
+            results.gsa = GSA(model, options)
 
     #Print Results
     if options.display:
@@ -213,8 +220,12 @@ def LSA(model, options):
     # Calculate Fisher Information Matrix from jacobian
     fisherMat=np.dot(np.transpose(jacRaw), jacRaw)
 
+    #Active Subspace Analysis
+    reducedModel, activeSpace, inactiveSpace = GetActiveSubspace(model, lsaOptions)
+
     #Collect Outputs and return as an lsa object
     return lsaResults(jacobian=jacRaw, rsi=jacRSI, fisher=fisherMat)
+
 
 
 ##--------------------------------------GSA-----------------------------------------------------
@@ -311,6 +322,43 @@ def GetJacobian(model, lsaOptions, **kwargs):
                                                                             # Scale jacobian for relative sensitivity
         del xPert, yPert, iPOI, jQOI                                        # Clear intermediate variables
     return jac                                                              # Return Jacobian
+
+##--------------------------------------------------------------------------------------------------
+def GetActiveSubspace(model,lsaOptions):
+    #Define reducedModel
+    reducedModel=model
+    eliminate==True
+    while eliminate:
+        #Calculate Jacobian
+        jac=GetJacobian(model, lsaOptions, scale=False)
+        #Caclulate Fisher
+        fisherMat=np.dot(np.transpose(jacRaw), jacRaw)
+        #Perform SVD
+        u, s, vh=np.linalg.svd(fisherMat,full_matrices=True, compute_uv=True, hermitian=True)
+        #Eliminate dimension/ terminate
+        if np.min(s) < lsaOptions.subspaceRelTol * np.max(s):
+            #Get inactive parameter
+            inactiveParam=model.POInames[np.argmax(vh[:,np.argmax(s)])]
+            #Reduce model
+            reducedModel=ModelReduction(reducedModel,inactiveParam)
+        else:
+            #Terminate Active Subspace if singular values within tolerance
+            eliminate==False
+    activeSpace=reducedModel.POInames
+    inactiveSpace=np.delete(model.basePOIs, np.where(model.basePOIs==reducedModel.basePOIs))
+    return reducedModel, activeSpace, inactiveSpace
+
+def ModelReudction(reducedModel,inactiveParam):
+    #Record Index of reduced param
+    inactiveIndex=np.where(reducedModel.POInames==inactiveParam)
+    #confirm exactly parameter matches
+    if inactiveIndex.size()!=0:
+        raise Exception("More than one or no POIs were found matching that name.")
+    #Remove relevant data elements
+    reducedModel.basePOIs=np.delete(ReducedModel.basePOIs, inactiveIndex)
+    reducedModel.POInames=np.delete(ReducedModel.basePOIs, inactiveIndex)
+    reducedModel.baseQOIs=evalFcn(reduceModel.basePOIs)
+    return reducedModel
 
 
 ##--------------------------------------GetSobol----------------------------------------------------
