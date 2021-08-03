@@ -33,11 +33,11 @@ def main():
 
 
     # # Get model and options object from Example set
-    # [model, options] = uqExamples.GetExample('ishigami (normal)')
+    [model, options] = uqExamples.GetExample('ishigami (uniform)')
     #
     # # [model, options] = uqExamples.GetExample('linear product')
     #
-    [model, options] = uqExamples.GetExample('aluminum rod (saltelli normal)')
+    # [model, options] = uqExamples.GetExample('aluminum rod (saltelli normal)')
     #options.plot.nPoints=options.gsa.nSamp
     #f
     # [model, options] = uqExamples.GetExample('aluminum rod (normal)')

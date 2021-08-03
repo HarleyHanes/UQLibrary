@@ -66,14 +66,16 @@ def GetExample(example, **kwargs):
                          dist="uniform",
                          distParms=np.array([[-math.pi, -math.pi, -math.pi], [math.pi, math.pi, math.pi]]))
         options.lsa=uq.lsaOptions(method='finite', xDelta=10**(-6))
-        options.gsa=uq.gsaOptions(nSamp= 100000)   # Use default number of samples
+        options.gsa=uq.gsaOptions(nSamp= 4000000)   # Use default number of samples
+        options.path='..\\Figures\\Ishigami(uniform)'
     elif example.lower() == 'ishigami (normal)':
         model = uq.model(evalFcn=Ishigami,
                          basePOIs=np.array([0, 0, 0]),
                          dist="SaltelliNormal",
                          distParms=np.array([[0, 0, 0], [(2*math.pi)**2/12, (2*math.pi)**2/12, (2*math.pi)**2/12]]))
         options.lsa=uq.lsaOptions(method='finite', xDelta=10**(-6))
-        options.gsa=uq.gsaOptions(nSamp= 100000)   # Use default number of samples
+        options.gsa=uq.gsaOptions(nSamp= 4000000)   # Use default number of samples
+        options.path='..\\Figures\\Ishigami(normal)'
     elif example.lower() == 'trial function':
         model = uq.model(evalFcn=TrialFunction,
                          basePOIs=np.array([1, 1, 1]),
@@ -170,9 +172,9 @@ def LinearProd(params):
         return np.prod(2 * params + 1, axis=1) / (2 ** (len(np.transpose(params)) + 1))
 def Ishigami(params):
     if params.ndim == 1:
-        return np.array([np.sin(params[0])+np.sin(params[1])**2+(params[2]**4)*np.sin(params[0])])
+        return np.array([np.sin(params[0])+7*np.sin(params[1])**2+.1*(params[2]**4)*np.sin(params[0])])
     elif params.ndim == 2:
-        return np.array([np.sin(params[:, 0])+np.sin(params[:, 1])**2+(params[:, 2]**4)*np.sin(params[:, 0])])
+        return np.array([np.sin(params[:, 0])+7*np.sin(params[:, 1])**2+.1*(params[:, 2]**4)*np.sin(params[:, 0])])
 def TrialFunction(params):
     if params.ndim == 1:
         return np.array([params[0]+params[1]*(params[2]**2)])

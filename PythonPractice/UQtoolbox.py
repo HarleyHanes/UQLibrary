@@ -52,7 +52,7 @@ class plotOptions:
 #--------------------------------------uqOptions------------------------------------------------
 #   Class holding the above options subclasses
 class uqOptions:
-    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions(), display=True, save=False, path=False):
+    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions(), display=True, save=True, path=False):
         self.lsa=lsa
         self.plot=plot
         self.gsa=gsa
@@ -61,7 +61,7 @@ class uqOptions:
         self.path=path                             #Where to save files
         if self.save and not self.path:
             warnings.warn("Save marked as true but no path given, saving files to current folder.")
-            path=os.getcwd()
+            path=''
     pass
 
 ##-------------------------------------model------------------------------------------------------
