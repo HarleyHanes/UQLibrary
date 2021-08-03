@@ -1,0 +1,128 @@
+Sensitivity results for nSamp=500000
+
+ Base POI Values
+  POI0    POI1    POI2
+------  ------  ------
+     0       0       0
+
+ Base QOI Values
+  QOI0
+------
+     0
+
+ Sensitivity Indices
+        QOI0
+----  ------
+POI0       0
+POI1       0
+POI2       0
+
+ Relative Sensitivity Indices
+        QOI0
+----  ------
+POI0       0
+POI1       0
+POI2       0
+
+ Sobol Indices for QOI0
+         1st Order    Total Sensitivity
+----  ------------  -------------------
+POI0   0.383231             0.999735
+POI1   0.00022822           0.000228412
+POI2  -3.18806e-05          0.616531
+Sensitivity results for nSamp=500000
+
+ Base POI Values
+  POI0    POI1    POI2
+------  ------  ------
+     0       0       0
+
+ Base QOI Values
+  QOI0
+------
+     0
+
+ Sensitivity Indices
+        QOI0
+----  ------
+POI0       0
+POI1       0
+POI2       0
+
+ Relative Sensitivity Indices
+        QOI0
+----  ------
+POI0       0
+POI1       0
+POI2       0
+
+ Sobol Indices for QOI0
+         1st Order    Total Sensitivity
+----  ------------  -------------------
+POI0   0.313877                0.557592
+POI1   0.442418                0.442423
+POI2  -2.89539e-05             0.243712
+Sensitivity results for nSamp=500000
+
+ Base POI Values
+  POI0    POI1    POI2
+------  ------  ------
+     0       0       0
+
+ Base QOI Values
+  QOI0
+------
+     0
+
+ Sensitivity Indices
+        QOI0
+----  ------
+POI0       0
+POI1       0
+POI2       0
+
+ Relative Sensitivity Indices
+        QOI0
+----  ------
+POI0       0
+POI1       0
+POI2       0
+
+ Sobol Indices for QOI0
+         1st Order    Total Sensitivity
+----  ------------  -------------------
+POI0   0.313877                0.557592
+POI1   0.442418                0.442423
+POI2  -2.89539e-05             0.243712
+Sensitivity results for nSamp=4000000
+
+ Base POI Values
+  POI0    POI1    POI2
+------  ------  ------
+     0       0       0
+
+ Base QOI Values
+  QOI0
+------
+     0
+
+ Sensitivity Indices
+        QOI0
+----  ------
+POI0       0
+POI1       0
+POI2       0
+
+ Relative Sensitivity Indices
+        QOI0
+----  ------
+POI0       0
+POI1       0
+POI2       0
+
+ Sobol Indices for QOI0
+        1st Order    Total Sensitivity
+----  -----------  -------------------
+POI0  0.313901                0.557589
+POI1  0.442413                0.442411
+POI2  1.42016e-05             0.243684

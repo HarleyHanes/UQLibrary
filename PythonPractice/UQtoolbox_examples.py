@@ -5,6 +5,7 @@
 import UQtoolbox as uq
 import numpy as np
 import math as math
+import scipy.integrate as integrate
 
 def GetExample(example, **kwargs):
     # Master function for selecting an example using a corresponding string
@@ -59,13 +60,22 @@ def GetExample(example, **kwargs):
                          dist="uniform",
                          distParms=np.array([[0, 0, 0, 0, 0], [1, 1, 1, 1, 1]]))
         options.gsa = uq.gsaOptions()  # Use default number of samples
-    elif example.lower() == 'ishigami':
+    elif example.lower() == 'ishigami (uniform)':
         model = uq.model(evalFcn=Ishigami,
                          basePOIs=np.array([0, 0, 0]),
                          dist="uniform",
                          distParms=np.array([[-math.pi, -math.pi, -math.pi], [math.pi, math.pi, math.pi]]))
         options.lsa=uq.lsaOptions(method='finite', xDelta=10**(-6))
-        options.gsa=uq.gsaOptions()   # Use default number of samples
+        options.gsa=uq.gsaOptions(nSamp= 4000000)   # Use default number of samples
+        options.path='..\\Figures\\Ishigami(uniform)'
+    elif example.lower() == 'ishigami (normal)':
+        model = uq.model(evalFcn=Ishigami,
+                         basePOIs=np.array([0, 0, 0]),
+                         dist="SaltelliNormal",
+                         distParms=np.array([[0, 0, 0], [(2*math.pi)**2/12, (2*math.pi)**2/12, (2*math.pi)**2/12]]))
+        options.lsa=uq.lsaOptions(method='finite', xDelta=10**(-6))
+        options.gsa=uq.gsaOptions(nSamp= 4000000)   # Use default number of samples
+        options.path='..\\Figures\\Ishigami(normal)'
     elif example.lower() == 'trial function':
         model = uq.model(evalFcn=TrialFunction,
                          basePOIs=np.array([1, 1, 1]),
@@ -84,7 +94,7 @@ def GetExample(example, **kwargs):
                        basePOIs=np.array([0, 0]),
                        dist="uniform",
                        distParms=np.array([[-np.sqrt(12)/2, -3*np.sqrt(3)], [np.sqrt(12)/2, 3*np.sqrt(3)]]))
-        options.plot.path = '..\\Figures\\Portfolio(Uniform)'
+        options.path = '..\\Figures\\Portfolio(Uniform)'
         options.gsa=uq.gsaOptions(nSamp = 2**12)
     elif example.lower() == 'aluminum rod (uniform)':
         model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([55])),
@@ -93,17 +103,27 @@ def GetExample(example, **kwargs):
                          distParms=np.array([[-18.4-(.1450*np.sqrt(3)), .00191-(1.4482*(10**(-5))*np.sqrt(3))],\
                                              [-18.4+(.1450*np.sqrt(3)), .00191+(1.4482*(10**(-5))*np.sqrt(3))]]),
                          POInames=np.array(['Phi', 'h']),
-                         QOInames=np.array(['T(x=65)']))
-        options.plot.path = '..\\Figures\\AluminumRod(Uniform)'
-        options.gsa = uq.gsaOptions(nSamp = 2**13)
+                         QOInames=np.array(['T(x=55)']))
+        options.path = '..\\Figures\\AluminumRod(Uniform, x=55)'
+        options.gsa = uq.gsaOptions(nSamp = 500000)
     elif example.lower() == 'aluminum rod (normal)':
         model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([55])),
                          basePOIs=np.array([-18.4, .00191]),
-                         dist="normal",
+                         dist='normal',
                          distParms=np.array([[-18.4, .00191], [.1450**2, (1.4482*10**(-5))**2]]),
                          POInames=np.array(['Phi', 'h']),
                          QOInames=np.array(['T(x=55)']))
-        options.gsa=uq.gsaOptions(nSamp = 10000)
+        options.path = '..\\Figures\\AluminumRod(Normal)'
+        options.gsa=uq.gsaOptions(nSamp = 100000000)
+    elif example.lower() == 'aluminum rod (saltelli normal)':
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([55])),
+                         basePOIs=np.array([-18.4, .00191]),
+                         dist="SaltelliNormal",
+                         distParms=np.array([[-18.4, .00191], [.1450**2, (1.4482*10**(-5))**2]]),
+                         POInames=np.array(['Phi', 'h']),
+                         QOInames=np.array(['T(x=55)']))
+        options.path = '..\\Figures\\AluminumRod(SaltelliNormal, x=55)'
+        options.gsa=uq.gsaOptions(nSamp = 200000)
     else:
         raise Exception("Unrecognized Example Type")
 
@@ -152,9 +172,9 @@ def LinearProd(params):
         return np.prod(2 * params + 1, axis=1) / (2 ** (len(np.transpose(params)) + 1))
 def Ishigami(params):
     if params.ndim == 1:
-        return np.array([np.sin(params[0])+np.sin(params[1])**2+(params[2]**4)*np.sin(params[0])])
+        return np.array([np.sin(params[0])+7*np.sin(params[1])**2+.1*(params[2]**4)*np.sin(params[0])])
     elif params.ndim == 2:
-        return np.array([np.sin(params[:, 0])+np.sin(params[:, 1])**2+(params[:, 2]**4)*np.sin(params[:, 0])])
+        return np.array([np.sin(params[:, 0])+7*np.sin(params[:, 1])**2+.1*(params[:, 2]**4)*np.sin(params[:, 0])])
 def TrialFunction(params):
     if params.ndim == 1:
         return np.array([params[0]+params[1]*(params[2]**2)])

@@ -13,6 +13,7 @@ import scipy.integrate as integrate
 from tabulate import tabulate                       #Used for printing tables to terminal
 import sobol                                        #Used for generating sobol sequences
 import SALib.sample as sample
+import scipy.stats as sct
 #import seaborne as seaborne
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Class Definitions----------------------------------------
@@ -51,10 +52,16 @@ class plotOptions:
 #--------------------------------------uqOptions------------------------------------------------
 #   Class holding the above options subclasses
 class uqOptions:
-    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions()):
+    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions(), display=True, save=True, path=False):
         self.lsa=lsa
         self.plot=plot
         self.gsa=gsa
+        self.display=display                       #Whether to print results to terminal
+        self.save=save                             #Whether to save results to files
+        self.path=path                             #Where to save files
+        if self.save and not self.path:
+            warnings.warn("Save marked as true but no path given, saving files to current folder.")
+            path=''
     pass
 
 ##-------------------------------------model------------------------------------------------------
@@ -172,12 +179,18 @@ def RunUQ(model, options):
         results.gsa = GSA(model, options)
 
     #Print Results
-    PrintResults(results,model,options)
+    if options.display:
+        PrintResults(results,model,options)                     #Print results to standard output path
+
+    if options.save:
+        original_stdout = sys.stdout                            #Save normal output path
+        sys.stdout=open(options.path + '\\Results.txt', 'a+')            #Change output path to results file
+        PrintResults(results,model,options)                     #Print results to file
+        sys.stdout=original_stdout                              #Revert normal output path
 
     #Plot Samples
-    # Plot Sample Statistics
-    if options.plot.run:
-        PlotGSA(model, results.gsa.sampD, results.gsa.fD, options.plot)
+    if options.gsa.run:
+        PlotGSA(model, results.gsa.sampD, results.gsa.fD, options)
 
     return results
 
@@ -223,6 +236,9 @@ def GSA(model, options):
 
 def PrintResults(results,model,options):
     # Print Results
+    #Results Header
+    print('Sensitivity results for nSamp=' + str(options.gsa.nSamp))
+    #Local Sensitivity Analysis
     if options.lsa.run:
         print('\n Base POI Values')
         print(tabulate([model.basePOIs], headers=model.POInames))
@@ -305,7 +321,7 @@ def GetSamples(model,gsaOptions):
     sampDist = model.sampDist
     evalFcn = model.evalFcn
     # Make 2 POI sample matrices with nSamp samples each
-    if model.dist.lower()=='uniform':
+    if model.dist.lower()=='uniform' or model.dist.lower()=='saltellinormal':
         (sampA, sampB)=sampDist(nSamp);                                     #Get both A and B samples so no repeated values
     else:
         sampA = sampDist(nSamp)
@@ -376,6 +392,8 @@ def GetSampDist(model, gsaOptions):
     # Determine Sample Function- Currently only 1 distribution type can be defined for all parameters
     if model.dist.lower() == 'normal':  # Normal Distribution
         sampDist = lambda nSamp: np.random.randn(nSamp,model.nPOIs)*np.sqrt(model.distParms[[1], :]) + model.distParms[[0], :]
+    elif model.dist.lower() == 'saltellinormal':
+        sampDist = lambda nSamp: SaltelliNormal(nSamp, model.distParms)
     elif model.dist.lower() == 'uniform':  # uniform distribution
         # doubleParms=np.concatenate(model.distParms, model.distParms, axis=1)
         sampDist = lambda nSamp: SaltelliSample(nSamp,model.distParms)
@@ -395,11 +413,11 @@ def GetSampDist(model, gsaOptions):
 
 #
 #
-def PlotGSA(model, sampleMat, evalMat, plotOptions):
+def PlotGSA(model, sampleMat, evalMat, options):
     #Reduce Sample number
     #plotPoints=range(0,int(sampleMat.shape[0]), int(sampleMat.shape[0]/plotOptions.nPoints))
     #Make the number of sample points to survey
-    plotPoints=np.linspace(start=0, stop=sampleMat.shape[0]-1, num=plotOptions.nPoints, dtype=int)
+    plotPoints=np.linspace(start=0, stop=sampleMat.shape[0]-1, num=options.plot.nPoints, dtype=int)
     #Plot POI-POI correlation and distributions
     figure, axes=plt.subplots(nrows=model.nPOIs, ncols= model.nPOIs, squeeze=False)
     for iPOI in range(0,model.nPOIs):
@@ -415,8 +433,8 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
             if model.nPOIs==1:
                 axes[iPOI,jPOI].set_ylabel('Instances')
     figure.tight_layout()
-    if plotOptions.path:
-        plt.savefig(plotOptions.path+"\\POIcorrelation")
+    if options.path:
+        plt.savefig(options.path+"\\POIcorrelation")
 
     #Plot QOI-QOI correlationa and distributions
     figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nQOIs, squeeze=False)
@@ -433,8 +451,8 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
             if model.nQOIs==1:
                 axes[iQOI,jQOI].set_ylabel('Instances')
     figure.tight_layout()
-    if plotOptions.path:
-        plt.savefig(plotOptions.path+"\\QOIcorrelation")
+    if options.path:
+        plt.savefig(options.path+"\\QOIcorrelation")
 
     #Plot POI-QOI correlation
     figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nPOIs, squeeze=False)
@@ -445,10 +463,11 @@ def PlotGSA(model, sampleMat, evalMat, plotOptions):
                 axes[iQOI,jPOI].set_ylabel(model.QOInames[iQOI])
             if iQOI==model.nQOIs-1:
                 axes[iQOI,jPOI].set_xlabel(model.POInames[jPOI])
-    if plotOptions.path:
-        plt.savefig(plotOptions.path+"\\POI_QOIcorrelation")
+    if options.path:
+        plt.savefig(options.path+"\\POI_QOIcorrelation")
     #Display all figures
-    plt.show()
+    if options.display:
+        plt.show()
 
 def SaltelliSample(nSamp,distParams):
     nPOIs=distParams.shape[1]
@@ -458,3 +477,41 @@ def SaltelliSample(nSamp,distParams):
     sampA=distParams[[0],:]+(distParams[[1],:]-distParams[[0],:])*baseA
     sampB=distParams[[0],:]+(distParams[[1],:]-distParams[[0],:])*baseB
     return (sampA, sampB)
+
+def SaltelliNormal(nSamp, distParms):
+    nPOIs=distParms.shape[1]
+    baseSample=sobol.sample(dimension=nPOIs*2, n_points=nSamp, skip=1099)
+    baseA=baseSample[:,:nPOIs]
+    baseB=baseSample[:,nPOIs:2*nPOIs]
+    transformA=sct.norm.ppf(baseA)
+    transformB=sct.norm.ppf(baseB)
+    sampA=transformA*np.sqrt(distParms[[1], :]) + distParms[[0], :]
+    sampB=transformB*np.sqrt(distParms[[1], :]) + distParms[[0], :]
+    return (sampA, sampB)
+
+
+def TestAccuracy(model,options,nSamp):
+    baseSobol=np.empty((nSamp.size, model.nPOIs))
+    totalSobol=np.empty((nSamp.size, model.nPOIs))
+    options.plot.run=False
+    options.lsa.run=False
+    options.print=False
+    for iSamp in range(0,nSamp.size):
+        options.gsa.nSamp=nSamp[iSamp]
+        results=RunUQ(model,options)
+        baseSobol[iSamp,:]=results.gsa.sobolBase
+        totalSobol[iSamp,:]=results.gsa.sobolTot
+    figure, axes=plt.subplots(nrows=2, ncols= model.nPOIs, squeeze=False)
+    for iPOI in np.arange(0,model.nPOIs):
+        axes[0, iPOI].plot(nSamp, baseSobol[:,iPOI], 'bs')
+        axes[1, iPOI].plot(nSamp, totalSobol[:,iPOI], 'bs')
+        axes[0,iPOI].set_title(model.POInames[iPOI])
+    axes[0,0].set_ylabel('First Order Sobol')
+    axes[1,0].set_ylabel('Total Sobol')
+    axes[1,0].set_xlabel('Number of Samples')
+    axes[1,1].set_xlabel('Number of Samples')
+    figure.tight_layout()
+    if options.path:
+        plt.savefig(options.path+"\\SobolConvergence")
+    plt.show()
+    return (baseSobol,totalSobol)
