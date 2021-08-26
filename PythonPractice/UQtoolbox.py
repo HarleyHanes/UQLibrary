@@ -41,9 +41,10 @@ class lsaOptions:
     pass
 #--------------------------------------gsaOptions------------------------------------------------
 class gsaOptions:
-    def __init__(self, run=True, nSamp=100000):
+    def __init__(self, run=True, nSampSobol=100000, nSampMorris=50):
         self.run=run                            #Whether to run GSA (True or False)
-        self.nSamp = nSamp                      #Number of samples to be generated for GSA
+        self.nSampSobol = nSampSobol                      #Number of samples to be generated for GSA
+        self.nSampMorris = nSampMorris
         pass
 #--------------------------------------plotOptions------------------------------------------------
 class plotOptions:
@@ -220,9 +221,9 @@ def LSA(model, options):
     # Outputs: Object of class lsa with Jacobian, RSI, and Fisher information matrix
 
     # Calculate Jacobian
-    jacRaw=GetJacobian(model, options.lsa, scale=False)
+    jacRaw=GetJacobian(model.evalFcn, model.basePOIs, options.lsa, scale=False, yBase=model.baseQOIs)
     # Calculate relative sensitivity index (RSI)
-    jacRSI=GetJacobian(model, options.lsa, scale=True)
+    jacRSI=GetJacobian(model.evalFcn, model.basePOIs, options.lsa, scale=True, yBase=model.baseQOIs)
     # Calculate Fisher Information Matrix from jacobian
     fisherMat=np.dot(np.transpose(jacRaw), jacRaw)
 
@@ -254,7 +255,7 @@ def GSA(model, options):
 def PrintResults(results,model,options):
     # Print Results
     #Results Header
-    print('Sensitivity results for nSamp=' + str(options.gsa.nSamp))
+    print('Sensitivity results for nSampSobol=' + str(options.gsa.nSampSobol))
     #Local Sensitivity Analysis
     if options.lsa.run:
         print('\n Base POI Values')
@@ -290,7 +291,7 @@ def PrintResults(results,model,options):
 ###----------------------------------------------------------------------------------------------
 
 ##--------------------------------------GetJacobian-----------------------------------------------------
-def GetJacobian(model, lsaOptions, **kwargs):
+def GetJacobian(evalFcn, xBase, lsaOptions, **kwargs):
     # GetJacobian calculates the Jacobian for n QOIs and p POIs
     # Required Inputs: object of class "model" (.cov element not required)
     #                  object of class "lsaOptions"
@@ -302,15 +303,17 @@ def GetJacobian(model, lsaOptions, **kwargs):
             raise Exception("Non-boolean value provided for 'scale' ")      # Stop compiling if not
     else:
         scale = False                                                       # Function defaults to no scaling
+    if 'yBase' in kwargs:
+        yBase = kwargs["yBase"]
+    else:
+        yBase = evalFcn(xBase)
 
     #Load options parameters for increased readibility
-    xBase=model.basePOIs
     xDelta=lsaOptions.xDelta
 
     #Initialize base QOI value, the number of POIs, and number of QOIs
-    yBase=model.baseQOIs                                             # Get base QOI values
-    nPOIs = model.nPOIs                                                     # Get number of parameters (nPOIs)
-    nQOIs = model.nQOIs                                                     # Get number of outputs (nQOIs)
+    nPOIs = np.size(xBase)
+    nQOIs = np.size(yBase)
 
     jac = np.empty(shape=(nQOIs, nPOIs), dtype=float)                       # Define Empty Jacobian Matrix
 
@@ -321,7 +324,7 @@ def GetJacobian(model, lsaOptions, **kwargs):
             xPert[iPOI] += xDelta * 1j                                      # Add complex Step in input
         elif lsaOptions.method.lower() == 'finite':
             xPert=xBase*(1+xDelta)
-        yPert = model.evalFcn(xPert)                                        # Calculate perturbed output
+        yPert = evalFcn(xPert)                                        # Calculate perturbed output
         for jQOI in range(0, nQOIs):                                        # Loop through QOIs
             if lsaOptions.method.lower()== 'complex':
                 jac[jQOI, iPOI] = np.imag(yPert[jQOI] / xDelta)                 # Estimate Derivative w/ 2nd order complex
@@ -339,7 +342,7 @@ def GetActiveSubspace(model,lsaOptions):
     eliminate=True
     inactiveIndex=np.zeros(model.nPOIs)
     #Calculate Jacobian
-    jac=GetJacobian(model, lsaOptions, scale=False)
+    jac=GetJacobian(model.evalFcn, model.basePOIs, lsaOptions, scale=False, yBase=model.baseQOIs)
     while eliminate:
         #Caclulate Fisher
         fisherMat=np.dot(np.transpose(jac), jac)
@@ -399,30 +402,30 @@ def GetReducedPOIs(reducedPOIs,droppedIndices,model):
     return fullPOIs
 
 
-##--------------------------------------GetSobol----------------------------------------------------
+##--------------------------------------GetSobol------------------------------------------------------
 # GSA Component Functions
 
 def GetSamples(model,gsaOptions):
-    nSamp = gsaOptions.nSamp
+    nSampSobol = gsaOptions.nSampSobol
     sampDist = model.sampDist
     evalFcn = model.evalFcn
-    # Make 2 POI sample matrices with nSamp samples each
+    # Make 2 POI sample matrices with nSampSobol samples each
     if model.dist.lower()=='uniform' or model.dist.lower()=='saltellinormal':
-        (sampA, sampB)=sampDist(nSamp);                                     #Get both A and B samples so no repeated values
+        (sampA, sampB)=sampDist(nSampSobol);                                     #Get both A and B samples so no repeated values
     else:
-        sampA = sampDist(nSamp)
-        sampB = sampDist(nSamp)
+        sampA = sampDist(nSampSobol)
+        sampB = sampDist(nSampSobol)
     # Calculate matrices of QOI values for each POI sample matrix
-    fA = evalFcn(sampA).reshape([nSamp, model.nQOIs])  # nSamp x nQOI out matrix from A
-    fB = evalFcn(sampB).reshape([nSamp, model.nQOIs])  # nSamp x nQOI out matrix from B
+    fA = evalFcn(sampA).reshape([nSampSobol, model.nQOIs])  # nSampSobol x nQOI out matrix from A
+    fB = evalFcn(sampB).reshape([nSampSobol, model.nQOIs])  # nSampSobol x nQOI out matrix from B
     # Stack the output matrices into a single matrix
     fD = np.concatenate((fA.copy(), fB.copy()), axis=0)
 
     # Initialize combined QOI sample matrices
     if model.nQOIs == 1:
-        fAB = np.empty([nSamp, model.nPOIs])
+        fAB = np.empty([nSampSobol, model.nPOIs])
     else:
-        fAB = np.empty([nSamp, model.nPOIs, model.nQOIs])
+        fAB = np.empty([nSampSobol, model.nPOIs, model.nQOIs])
     for iParams in range(0, model.nPOIs):
         # Define sampC to be A with the ith parameter in B
         sampAB = sampA.copy()
@@ -430,7 +433,7 @@ def GetSamples(model,gsaOptions):
         if model.nQOIs == 1:
             fAB[:, iParams] = evalFcn(sampAB)
         else:
-            fAB[:, iParams, :] = evalFcn(sampAB)  # nSamp x nPOI x nQOI tensor
+            fAB[:, iParams, :] = evalFcn(sampAB)  # nSampSobol x nPOI x nQOI tensor
         del sampAB
     return fA, fB, fAB, fD, np.concatenate((sampA.copy(), sampB.copy()), axis=0)
 
@@ -439,7 +442,7 @@ def CalculateSobol(fA, fB, fAB, fD):
     #Inputs: model object (with evalFcn, sampDist, and nParams)
     #        sobolOptions object
     #Determing number of samples, QOIs, and POIs based on inputs
-    nSamp=fAB.shape[0]
+    nSampSobol=fAB.shape[0]
     if fAB.ndim==1:
         nQOIs=1
         nPOIs=1
@@ -450,7 +453,7 @@ def CalculateSobol(fA, fB, fAB, fD):
         nPOIs=fAB.shape[1]
         nQOIs=fAB.shape[2]
     else:
-        raise(Exception('fAB has greater than 3 dimensions, make sure fAB is the squeezed form of nSamp x nPOI x nQOI'))
+        raise(Exception('fAB has greater than 3 dimensions, make sure fAB is the squeezed form of nSampSobol x nPOI x nQOI'))
     #QOI variance
     fDvar=np.var(fD, axis=0)
 
@@ -473,23 +476,47 @@ def CalculateSobol(fA, fB, fAB, fD):
 
     return sobolBase, sobolTot
 
+##-------------------------------------GetMorris-------------------------------------------------------
+def CaclulateMorris():
+    #Determine axis #
+    if model.nQOIs==1:
+        axisNumber=1
+    else:
+        axisNumber=2
+
+    #Get Parameter Samples
+
+    #Calulate derivative indices
+    
+    d= np.empty(model.nPOIs, model.nQOIs, options.gsa.nSampMorris)#nPOIs x nQOIs x nSamples
+    for iSamp in range(0,nSampMorris):
+        d[:,:,iSamp]=GetJacobian(model.evalFcn, morrisSamp[:,iSamp],lsaOptions,scale=False)
+    
+    #Compute Indices- all outputs are nPOIs x nQOIs
+    muStar=np.mean(np.abs(d),axis=axisNumber) 
+    mu=np.mean(d,axis=axisNumber)
+    sigma2=np.var(d, axis=axisNumber)
+
+    return muStar, sigma2
+
+
 ##--------------------------------------GetSampDist----------------------------------------------------
 def GetSampDist(model, gsaOptions):
     # Determine Sample Function- Currently only 1 distribution type can be defined for all parameters
     if model.dist.lower() == 'normal':  # Normal Distribution
-        sampDist = lambda nSamp: np.random.randn(nSamp,model.nPOIs)*np.sqrt(model.distParms[[1], :]) + model.distParms[[0], :]
+        sampDist = lambda nSampSobol: np.random.randn(nSampSobol,model.nPOIs)*np.sqrt(model.distParms[[1], :]) + model.distParms[[0], :]
     elif model.dist.lower() == 'saltellinormal':
-        sampDist = lambda nSamp: SaltelliNormal(nSamp, model.distParms)
+        sampDist = lambda nSampSobol: SaltelliNormal(nSampSobol, model.distParms)
     elif model.dist.lower() == 'uniform':  # uniform distribution
         # doubleParms=np.concatenate(model.distParms, model.distParms, axis=1)
-        sampDist = lambda nSamp: SaltelliSample(nSamp,model.distParms)
+        sampDist = lambda nSampSobol: SaltelliSample(nSampSobol,model.distParms)
     elif model.dist.lower() == 'exponential': # exponential distribution
-        sampDist = lambda nSamp: np.random.exponential(model.distParms,size=(nSamp,model.nPOIs))
+        sampDist = lambda nSampSobol: np.random.exponential(model.distParms,size=(nSampSobol,model.nPOIs))
     elif model.dist.lower() == 'beta': # beta distribution
-        sampDist = lambda nSamp:np.random.beta(model.distParms[[0],:], model.distParms[[1],:],\
-                                               size=(nSamp,model.nPOIs))
+        sampDist = lambda nSampSobol:np.random.beta(model.distParms[[0],:], model.distParms[[1],:],\
+                                               size=(nSampSobol,model.nPOIs))
     elif model.dist.lower() == 'InverseCDF': #Arbitrary distribution given by inverse cdf
-        sampDist = lambda nSamp: gsaOptions.fInverseCDF(np.random.rand(nSamp,model.nPOIs))
+        sampDist = lambda nSampSobol: gsaOptions.fInverseCDF(np.random.rand(nSampSobol,model.nPOIs))
     else:
         raise Exception("Invalid value for options.gsa.dist. Supported distributions are normal, uniform, exponential, beta, \
         and InverseCDF")  # Raise Exception if invalide distribution is entered
@@ -555,18 +582,18 @@ def PlotGSA(model, sampleMat, evalMat, options):
     if options.display:
         plt.show()
 
-def SaltelliSample(nSamp,distParams):
+def SaltelliSample(nSampSobol,distParams):
     nPOIs=distParams.shape[1]
-    baseSample=sobol.sample(dimension=nPOIs*2, n_points=nSamp, skip=1099)
+    baseSample=sobol.sample(dimension=nPOIs*2, n_points=nSampSobol, skip=1099)
     baseA=baseSample[:,:nPOIs]
     baseB=baseSample[:,nPOIs:2*nPOIs]
     sampA=distParams[[0],:]+(distParams[[1],:]-distParams[[0],:])*baseA
     sampB=distParams[[0],:]+(distParams[[1],:]-distParams[[0],:])*baseB
     return (sampA, sampB)
 
-def SaltelliNormal(nSamp, distParms):
+def SaltelliNormal(nSampSobol, distParms):
     nPOIs=distParms.shape[1]
-    baseSample=sobol.sample(dimension=nPOIs*2, n_points=nSamp, skip=1099)
+    baseSample=sobol.sample(dimension=nPOIs*2, n_points=nSampSobol, skip=1099)
     baseA=baseSample[:,:nPOIs]
     baseB=baseSample[:,nPOIs:2*nPOIs]
     transformA=sct.norm.ppf(baseA)
@@ -576,21 +603,21 @@ def SaltelliNormal(nSamp, distParms):
     return (sampA, sampB)
 
 
-def TestAccuracy(model,options,nSamp):
-    baseSobol=np.empty((nSamp.size, model.nPOIs))
-    totalSobol=np.empty((nSamp.size, model.nPOIs))
+def TestAccuracy(model,options,nSampSobol):
+    baseSobol=np.empty((nSampSobol.size, model.nPOIs))
+    totalSobol=np.empty((nSampSobol.size, model.nPOIs))
     options.plot.run=False
     options.lsa.run=False
     options.print=False
-    for iSamp in range(0,nSamp.size):
-        options.gsa.nSamp=nSamp[iSamp]
+    for iSamp in range(0,nSampSobol.size):
+        options.gsa.nSampSobol=nSampSobol[iSamp]
         results=RunUQ(model,options)
         baseSobol[iSamp,:]=results.gsa.sobolBase
         totalSobol[iSamp,:]=results.gsa.sobolTot
     figure, axes=plt.subplots(nrows=2, ncols= model.nPOIs, squeeze=False)
     for iPOI in np.arange(0,model.nPOIs):
-        axes[0, iPOI].plot(nSamp, baseSobol[:,iPOI], 'bs')
-        axes[1, iPOI].plot(nSamp, totalSobol[:,iPOI], 'bs')
+        axes[0, iPOI].plot(nSampSobol, baseSobol[:,iPOI], 'bs')
+        axes[1, iPOI].plot(nSampSobol, totalSobol[:,iPOI], 'bs')
         axes[0,iPOI].set_title(model.POInames[iPOI])
     axes[0,0].set_ylabel('First Order Sobol')
     axes[1,0].set_ylabel('Total Sobol')
