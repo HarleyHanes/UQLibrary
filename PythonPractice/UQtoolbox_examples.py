@@ -33,7 +33,7 @@ def GetExample(example, **kwargs):
                          cov=np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
         options.gsa = uq.gsaOptions(nSamp=100)  # Keep normal sampling but reduce sample size to 100
     elif example.lower() == 'helmholtz':
-        baseEvalPoints = np.arange(0, 1, .02)
+        baseEvalPoints = np.arange(0, .801, .05)
         model = uq.model(evalFcn=lambda params: HelmholtzEnergy(baseEvalPoints, params),
                          basePOIs=np.array([-392.66, 770.1, 57.61]),
                          cov=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
@@ -43,7 +43,7 @@ def GetExample(example, **kwargs):
         model.distParms = np.array([[.8, .8, .8], [1.2, 1.2, 1.2]]) * model.basePOIs
         options.gsa = uq.gsaOptions(nSamp=10000)  # Keep normal sampling but reduce sample size to 100
     elif example.lower() == 'integrated helmholtz':
-        model = uq.model(evalFcn=lambda params: IntegratedHelmholtzEnergy(np.array([.8, .80001]), params),
+        model = uq.model(evalFcn=lambda params: IntegratedHelmholtzEnergy(np.arange(0,.8,.06), params),
                          basePOIs=np.array([-389.4, 761.3, 61.5]),
                          cov=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
                                        [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
@@ -107,12 +107,13 @@ def GetExample(example, **kwargs):
         options.path = '..\\Figures\\AluminumRod(Uniform, x=55)'
         options.gsa = uq.gsaOptions(nSamp = 500000)
     elif example.lower() == 'aluminum rod (normal)':
-        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([55])),
+        model = uq.model(evalFcn=lambda params: HeatRod(params, np.array([15, 25, 35, 45, 55])),
                          basePOIs=np.array([-18.4, .00191]),
                          dist='normal',
                          distParms=np.array([[-18.4, .00191], [.1450**2, (1.4482*10**(-5))**2]]),
                          POInames=np.array(['Phi', 'h']),
-                         QOInames=np.array(['T(x=55)']))
+                         #QOInames=np.array(['T(x=15)','T(x=55)'])
+                         )
         options.path = '..\\Figures\\AluminumRod(Normal)'
         options.gsa=uq.gsaOptions(nSamp = 100000000)
     elif example.lower() == 'aluminum rod (saltelli normal)':
@@ -123,7 +124,14 @@ def GetExample(example, **kwargs):
                          POInames=np.array(['Phi', 'h']),
                          QOInames=np.array(['T(x=55)']))
         options.path = '..\\Figures\\AluminumRod(SaltelliNormal, x=55)'
-        options.gsa=uq.gsaOptions(nSamp = 200000)
+        options.gsa = uq.gsaOptions(nSamp = 200000)
+    elif example.lower() == 'sir infected':
+        model = uq.model(evalFcn = lambda params: SolveSIRinfected(params, np.array([960, 40, 0]), np.array([0, 1, 3, 5, 6])),
+                         basePOIs=np.array([8, 1.5]),
+                         POInames=np.array(['beta', 'gamma'])
+                         )
+        options.lsa.method='finite'
+        options.lsa.xDelta=.00001
     else:
         raise Exception("Unrecognized Example Type")
 
@@ -211,3 +219,17 @@ def HeatRod(params,x):
         c2 = c2[:, np.newaxis]
     T = c1*np.exp(-gx)+c2*np.exp(gx)+Tamb
     return T
+def SolveSIRinfected(params,y0,tEval):
+    if params.ndim==1:
+        sol=integrate.solve_ivp(lambda t,y: SIRdydt(params,t,y), np.array([0, np.max(tEval)]),y0,t_eval=tEval)
+        infected=sol.y[1,:]
+    else:
+        print('Deprecated Right Now')
+    return infected
+
+def SIRdydt(params,t,y):
+    dydt=np.empty(3)
+    dydt[0]=-params[0]*y[1]/(np.sum(y))*y[0]
+    dydt[1]=params[0]*y[1]/(np.sum(y))*y[0]-params[1]*y[1]
+    dydt[2]=params[1]*y[1]
+    return dydt

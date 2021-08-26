@@ -33,7 +33,8 @@ def main():
 
 
     # # Get model and options object from Example set
-    [model, options] = uqExamples.GetExample('ishigami (uniform)')
+    [model, options] = uqExamples.GetExample('helmholtz')
+    options.gsa.run = False
     #
     # # [model, options] = uqExamples.GetExample('linear product')
     #

@@ -113,7 +113,7 @@ class model:
         #Assign distributions
         self.dist = dist                        #String identifying sampling distribution for parameters
                                                 #       Supported distributions: unif, normal, exponential, beta, inverseCDF
-        if isinstance(distParms,str):
+        if not isinstance(distParms,str):
             if self.dist.lower()=='uniform':
                 self.distParms=[[.8],[1.2]]*np.ones((2,self.nPOIs))*self.basePOIs
             elif self.dist.lower()=='normal':
@@ -125,16 +125,22 @@ class model:
         else:
             self.distParms=distParms
     pass
+    def copy(self):
+        return model(basePOIs=self.basePOIs, POInames = self.POInames, QOInames= self.QOInames, cov=self.cov, \
+                 evalFcn=self.evalFcn, dist=self.dist,distParms=self.distParms)
 
 ##------------------------------------results-----------------------------------------------------
 #-------------------------------------lsaResults--------------------------------------------------
 # Define class "lsa", this will be the used to collect relative sensitivity analysis outputs
 class lsaResults:
     #
-    def __init__(self,jacobian=np.empty, rsi=np.empty, fisher=np.empty):
+    def __init__(self,jacobian=np.empty, rsi=np.empty, fisher=np.empty, reducedModel=np.empty, activeSpace="", inactiveSpace=""):
         self.jac=jacobian
         self.rsi=rsi
         self.fisher=fisher
+        self.reducedModel=reducedModel
+        self.activeSpace=activeSpace
+        self.inactiveSpace=inactiveSpace
     pass
 #-------------------------------------gsaResults--------------------------------------------------
 # Define class "gsaResults" which holds sobol analysis results
@@ -221,10 +227,10 @@ def LSA(model, options):
     fisherMat=np.dot(np.transpose(jacRaw), jacRaw)
 
     #Active Subspace Analysis
-    reducedModel, activeSpace, inactiveSpace = GetActiveSubspace(model, lsaOptions)
+    reducedModel, activeSpace, inactiveSpace = GetActiveSubspace(model, options.lsa)
 
     #Collect Outputs and return as an lsa object
-    return lsaResults(jacobian=jacRaw, rsi=jacRSI, fisher=fisherMat)
+    return lsaResults(jacobian=jacRaw, rsi=jacRSI, fisher=fisherMat, reducedModel=reducedModel, activeSpace=activeSpace, inactiveSpace=inactiveSpace)
 
 
 
@@ -256,12 +262,17 @@ def PrintResults(results,model,options):
         print('\n Base QOI Values')
         print(tabulate([model.baseQOIs], headers=model.QOInames))
         print('\n Sensitivity Indices')
-        print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.lsa.jac.reshape(model.nPOIs,model.nQOIs)),1),
+        print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),np.transpose(results.lsa.jac)),1),
               headers= np.append("",model.QOInames)))
         print('\n Relative Sensitivity Indices')
-        print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.lsa.rsi.reshape(model.nPOIs,model.nQOIs)),1),
+        print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),np.transpose(results.lsa.rsi)),1),
               headers= np.append("",model.QOInames)))
         #print("Fisher Matrix: " + str(results.lsa.fisher))
+        #Active Subsapce Analysis
+        print('\n Active Supspace')
+        print(results.lsa.activeSpace)
+        print('\n Inactive Supspace')
+        print(results.lsa.inactiveSpace)
     if options.gsa.run:
         if model.nQOIs==1:
             print('\n Sobol Indices for ' + model.QOInames[0])
@@ -297,7 +308,7 @@ def GetJacobian(model, lsaOptions, **kwargs):
     xDelta=lsaOptions.xDelta
 
     #Initialize base QOI value, the number of POIs, and number of QOIs
-    yBase=model.evalFcn(xBase)                                              # Get base QOI values
+    yBase=model.baseQOIs                                             # Get base QOI values
     nPOIs = model.nPOIs                                                     # Get number of parameters (nPOIs)
     nQOIs = model.nQOIs                                                     # Get number of outputs (nQOIs)
 
@@ -325,40 +336,67 @@ def GetJacobian(model, lsaOptions, **kwargs):
 
 ##--------------------------------------------------------------------------------------------------
 def GetActiveSubspace(model,lsaOptions):
-    #Define reducedModel
-    reducedModel=model
-    eliminate==True
+    eliminate=True
+    inactiveIndex=np.zeros(model.nPOIs)
+    #Calculate Jacobian
+    jac=GetJacobian(model, lsaOptions, scale=False)
     while eliminate:
-        #Calculate Jacobian
-        jac=GetJacobian(model, lsaOptions, scale=False)
         #Caclulate Fisher
-        fisherMat=np.dot(np.transpose(jacRaw), jacRaw)
-        #Perform SVD
-        u, s, vh=np.linalg.svd(fisherMat,full_matrices=True, compute_uv=True, hermitian=True)
+        fisherMat=np.dot(np.transpose(jac), jac)
+        #Perform Eigendecomp
+        eigenValues, eigenVectors =np.linalg.eig(fisherMat)
         #Eliminate dimension/ terminate
-        if np.min(s) < lsaOptions.subspaceRelTol * np.max(s):
+        if np.min(eigenValues) < lsaOptions.subspaceRelTol * np.max(eigenValues):
             #Get inactive parameter
-            inactiveParam=model.POInames[np.argmax(vh[:,np.argmax(s)])]
-            #Reduce model
-            reducedModel=ModelReduction(reducedModel,inactiveParam)
+            inactiveParamReducedIndex=np.argmax(np.absolute(eigenVectors[:, np.argmin(np.absolute(eigenValues))]))
+            inactiveParam=inactiveParamReducedIndex+np.sum(inactiveIndex[0:(inactiveParamReducedIndex+1)]).astype(int)
+                #This indexing may seem odd but its because we're keeping the full model parameter numbering while trying
+                # to index within the reduced model so we have to add to the index the previously removed params
+            #Record inactive param in inactive space
+            inactiveIndex[inactiveParam]=1
+            #Remove inactive elements of jacobian
+            jac=np.delete(jac,inactiveParamReducedIndex,1)
         else:
             #Terminate Active Subspace if singular values within tolerance
-            eliminate==False
-    activeSpace=reducedModel.POInames
-    inactiveSpace=np.delete(model.basePOIs, np.where(model.basePOIs==reducedModel.basePOIs))
+            eliminate=False
+    #Define active and inactive spaces
+    activeSpace=model.POInames[inactiveIndex == False]
+    inactiveSpace=model.POInames[inactiveIndex == True]
+    #Create Reduced model
+    reducedModel=model.copy()
+    # reducedModel.basePOIs=reducedModel.basePOIs[inactiveIndex == False]
+    # reducedModel.POInames=reducedModel.POInames[inactiveIndex == False]
+    # reducedModel.evalFcn = lambda reducedPOIs: model.evalFcn(
+    #     np.array([x for x, y in zip(reducedPOIs,model.basePOIs) if inactiveIndex== True]))
+    # #reducedModel.evalFcn=lambda reducedPOIs: model.evalFcn(np.where(inactiveIndex==False, reducedPOIs, model.basePOIs))
+    # reducedModel.baseQOIs=reducedModel.evalFcn(reducedModel.basePOIs)
     return reducedModel, activeSpace, inactiveSpace
 
-def ModelReudction(reducedModel,inactiveParam):
+def ModelReduction(reducedModel,inactiveParam,model):
     #Record Index of reduced param
-    inactiveIndex=np.where(reducedModel.POInames==inactiveParam)
+    inactiveIndex=np.where(reducedModel.POInames==inactiveParam)[0]
     #confirm exactly parameter matches
-    if inactiveIndex.size()!=0:
+    if len(inactiveIndex)!=1:
         raise Exception("More than one or no POIs were found matching that name.")
     #Remove relevant data elements
-    reducedModel.basePOIs=np.delete(ReducedModel.basePOIs, inactiveIndex)
-    reducedModel.POInames=np.delete(ReducedModel.basePOIs, inactiveIndex)
-    reducedModel.baseQOIs=evalFcn(reduceModel.basePOIs)
+    reducedModel.basePOIs=np.delete(reducedModel.basePOIs, inactiveIndex)
+    reducedModel.POInames=np.delete(reducedModel.POInames, inactiveIndex)
+    reducedModel.evalFcn=lambda reducedPOIs: model.evalFcn(np.where(inactiveIndex==True,reducedPOIs,model.basePOIs))
+    print('made evalFcn')
+    print(reducedModel.evalFcn(reducedModel.basePOIs))
     return reducedModel
+
+def GetReducedPOIs(reducedPOIs,droppedIndices,model):
+    fullPOIs=model.basePOIs
+    reducedCounter=0
+    print(droppedIndices)
+    for i in np.arange(0,model.nPOIs):
+        print(i)
+        if droppedIndices==i:
+            fullPOIs[i]=reducedPOIs[reducedCounter]
+            reducedCounter=reducedCounter+1
+    print(fullPOIs)
+    return fullPOIs
 
 
 ##--------------------------------------GetSobol----------------------------------------------------
