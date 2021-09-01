@@ -41,10 +41,11 @@ class lsaOptions:
     pass
 #--------------------------------------gsaOptions------------------------------------------------
 class gsaOptions:
-    def __init__(self, run=True, nSampSobol=100000, nSampMorris=50):
+    def __init__(self, run=True, nSampSobol=100000, nSampMorris=4, lMorris=3):
         self.run=run                            #Whether to run GSA (True or False)
         self.nSampSobol = nSampSobol                      #Number of samples to be generated for GSA
         self.nSampMorris = nSampMorris
+        self.lMorris=lMorris
         pass
 #--------------------------------------plotOptions------------------------------------------------
 class plotOptions:
@@ -496,17 +497,42 @@ def CalculateSobol(fA, fB, fAB, fD):
 
 ##-------------------------------------GetMorris-------------------------------------------------------
 def CaclulateMorris(model,options):
+    #Define delta
+    delta=(options.gsa.lMorris+1)/(2*options.gsa.lMorris)
     #Get Parameter Samples- use parameter distribution
-    #morrisSamp=(sobol.sample(dimension=model.nPOIs, n_points=options.gsa.nSampMorris, skip=20001)-.5)*.4*model.basePOIs
-    morrisSamp=model.sampDist(options.gsa.nSampMorris)[0]
+    paramsSamp=model.sampDist(options.gsa.nSampMorris)[0]
     #Calulate derivative indices
-    d= np.empty((model.nQOIs, model.nPOIs, options.gsa.nSampMorris)) #nQOIs x nPOIs x nSamples
+    d= np.empty((options.gsa.nSampMorris, model.nPOIs, model.nQOIs)) #nQOIs x nPOIs x nSamples
+    #Define constant sampling matrices
+    J=np.ones((model.nPOIs+1,model.nPOIs))
+    B = (np.tril(np.ones(J.shape), -1))
     for iSamp in range(0,options.gsa.nSampMorris):
-        d[:,:,iSamp]=GetJacobian(model.evalFcn, morrisSamp[iSamp,:],options.lsa,scale=False)
-    
+        #Define Random Sampling matrices
+        D=np.diag(np.random.choice(np.array([1,-1]), size=(model.nPOIs,)))
+        P=np.identity(model.nPOIs)
+        #np.random.shuffle(P)
+        jTheta=paramsSamp[iSamp,]*J
+        #CalculateMorris Sample matrix
+        Bj=np.matmul(jTheta+delta/2*(np.matmul((2*B-J),D)+J),P)
+        fBj=model.evalFcn(Bj)
+        for k in np.arange(0,model.nPOIs):
+            i=np.nonzero(Bj[k+1,:]-Bj[k,:])[0][0]
+            print(np.nonzero(Bj[k+1,:]-Bj[k,:]))
+            if Bj[k+1,i]-Bj[k,i]>0:
+                if model.nQOIs==1:
+                    d[iSamp,i]=(fBj[k+1]-fBj[k])/delta
+                else:
+                    d[iSamp,i,:]=(fBj[k+1]-fBj[k])/delta
+            elif Bj[k+1,i]-Bj[k,i]<0:
+                if model.nQOIs==1:
+                    d[iSamp,i]=(fBj[k]-fBj[k+1])/delta
+                else:
+                    d[iSamp,i,:]=(fBj[k,:]-fBj[k+1,:])/delta
+            else:
+                raise(Exception('0 difference identified in Morris'))
     #Compute Indices- all outputs are nQOIs x nPOIs
-    muStar=np.mean(np.abs(d),axis=2)
-    sigma2=np.var(d, axis=2)
+    muStar=np.mean(np.abs(d),axis=0)
+    sigma2=np.var(d, axis=0)
 
     return muStar, sigma2
 

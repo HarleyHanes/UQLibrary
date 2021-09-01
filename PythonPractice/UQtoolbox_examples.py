@@ -128,7 +128,9 @@ def GetExample(example, **kwargs):
     elif example.lower() == 'sir infected':
         model = uq.model(evalFcn = lambda params: SolveSIRinfected(params, np.array([960, 40, 0]), np.array([0, 1, 3, 5, 6])),
                          basePOIs=np.array([8, 1.5]),
-                         POInames=np.array(['beta', 'gamma'])
+                         POInames=np.array(['beta', 'gamma']),
+                         dist='uniform',
+                         distParms=np.array([[0, 0], [1, 1]])
                          )
         options.lsa.method='finite'
         options.lsa.xDelta=.00001
@@ -229,7 +231,11 @@ def SolveSIRinfected(params,y0,tEval):
         sol=integrate.solve_ivp(lambda t,y: SIRdydt(params,t,y), np.array([0, np.max(tEval)]),y0,t_eval=tEval)
         infected=sol.y[1,:]
     else:
-        print('Deprecated Right Now')
+        infected=np.empty((params.shape[0],tEval.size))
+        for i in np.arange(0,params.shape[0]):
+            sol = integrate.solve_ivp(lambda t, y: SIRdydt(params[i,], t, y), np.array([0, np.max(tEval)]), y0,
+                                      t_eval=tEval)
+            infected[i,:]=sol.y[1,:]
     return infected
 
 def SIRdydt(params,t,y):
