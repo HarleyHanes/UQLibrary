@@ -132,6 +132,11 @@ def GetExample(example, **kwargs):
                          )
         options.lsa.method='finite'
         options.lsa.xDelta=.00001
+    elif example.lower() == 'sobol test function':
+        model = uq.model(evalFcn= lambda params: SobolTestFunction(params,np.array([78, 12, .5, 2, 97, 33])),
+                         basePOIs= np.array([.5, .5, .5, .5, .5, .5]),
+                         dist='uniform',
+                         distParms=np.array([[0,0,0,0,0,0], [1,1,1,1,1,1]]))
     else:
         raise Exception("Unrecognized Example Type")
 
@@ -233,3 +238,9 @@ def SIRdydt(params,t,y):
     dydt[1]=params[0]*y[1]/(np.sum(y))*y[0]-params[1]*y[1]
     dydt[2]=params[1]*y[1]
     return dydt
+
+def SobolTestFunction(theta,a):
+    if theta.ndim==1:
+        return np.array([np.prod((np.abs(4*theta-2)+a)/(1+a))])
+    else:
+        return np.prod((np.abs(4*theta-2)+a)/(1+a), axis=1)

@@ -56,7 +56,7 @@ class plotOptions:
 #--------------------------------------uqOptions------------------------------------------------
 #   Class holding the above options subclasses
 class uqOptions:
-    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions(), display=True, save=True, path=False):
+    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions(), display=True, save=False, path='..'):
         self.lsa=lsa
         self.plot=plot
         self.gsa=gsa
@@ -114,7 +114,7 @@ class model:
         #Assign distributions
         self.dist = dist                        #String identifying sampling distribution for parameters
                                                 #       Supported distributions: unif, normal, exponential, beta, inverseCDF
-        if not isinstance(distParms,str):
+        if isinstance(distParms,str):
             if self.dist.lower()=='uniform':
                 self.distParms=[[.8],[1.2]]*np.ones((2,self.nPOIs))*self.basePOIs
             elif self.dist.lower()=='normal':
@@ -147,7 +147,8 @@ class lsaResults:
 # Define class "gsaResults" which holds sobol analysis results
 class gsaResults:
     #
-    def __init__(self,sobolBase=np.empty, sobolTot=np.empty, fA=np.empty, fB=np.empty, fD=np.empty, fAB=np.empty, sampD=np.empty):
+    def __init__(self,sobolBase=np.empty, sobolTot=np.empty, fA=np.empty, fB=np.empty, fD=np.empty, fAB=np.empty, \
+                 sampD=np.empty,sigma2=np.empty, muStar=np.empty):
         self.sobolBase=sobolBase
         self.sobolTot=sobolTot
         self.fA=fA
@@ -155,6 +156,8 @@ class gsaResults:
         self.fD=fD
         self.fAB=fAB
         self.sampD=sampD
+        self.muStar=muStar
+        self.sigma2=sigma2
     pass
 ##------------------------------------results-----------------------------------------------------
 # Define class "results" which holds a gsaResults object and lsaResults object
@@ -244,13 +247,19 @@ def GSA(model, options):
         # 4) Produces histogram plots for QOI values (not yet implemented)
     # Required Inputs: Object of class "model" and object of class "options"
     # Outputs: Object of class gsa with fisher and sobol elements
+
     #Get Parameter Distributions
     model=GetSampDist(model, options.gsa)
+
+    #Morris Screening
+    muStar, sigma2 = CaclulateMorris(model, options)
+
+    #Sobol Analysis
     #Make Distribution Samples and Calculate model results
     [fA, fB, fAB, fD, sampD] = GetSamples(model, options.gsa)
     #Calculate Sobol Indices
     [sobolBase, sobolTot]=CalculateSobol(fA, fB, fAB, fD)
-    return gsaResults(fD=fD, fA=fA, fB=fB, fAB=fAB, sampD= sampD, sobolBase=sobolBase, sobolTot=sobolTot)
+    return gsaResults(fD=fD, fA=fA, fB=fB, fAB=fAB, sampD= sampD, sobolBase=sobolBase, sobolTot=sobolTot, muStar=muStar, sigma2=sigma2)
 
 def PrintResults(results,model,options):
     # Print Results
@@ -280,11 +289,22 @@ def PrintResults(results,model,options):
             print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1), results.gsa.sobolBase.reshape(model.nPOIs,1), \
                                            results.gsa.sobolTot.reshape(model.nPOIs,1)), 1),
                            headers=["", "1st Order", "Total Sensitivity"]))
+
+            print('\n Morris Screening Results for' + model.QOInames[0])
+            print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs, 1), results.gsa.muStar.reshape(model.nPOIs, 1), \
+                                           results.gsa.sigma2.reshape(model.nPOIs, 1)), 1),
+                headers=["", "muStar", "sigma2"]))
         else:
             for iQOI in range(0,model.nQOIs):
                 print('\n Sobol Indices for '+ model.QOInames[iQOI])
                 print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.gsa.sobolBase[[iQOI],:].reshape(model.nPOIs,1), \
                     results.gsa.sobolTot[[iQOI],:].reshape(model.nPOIs,1)),1), headers = ["", "1st Order", "Total Sensitivity"]))
+
+                print('\n Morris Screening Results for' + model.QOInames[iQOI])
+                print(tabulate(np.concatenate(
+                    (model.POInames.reshape(model.nPOIs, 1), results.gsa.muStar[[iQOI], :].reshape(model.nPOIs, 1), \
+                     results.gsa.sigma2[[iQOI], :].reshape(model.nPOIs, 1)), 1),
+                               headers=["", "muStar", "sigma2"]))
 
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Support Functions----------------------------------------
@@ -407,17 +427,15 @@ def GetReducedPOIs(reducedPOIs,droppedIndices,model):
 
 def GetSamples(model,gsaOptions):
     nSampSobol = gsaOptions.nSampSobol
-    sampDist = model.sampDist
-    evalFcn = model.evalFcn
     # Make 2 POI sample matrices with nSampSobol samples each
     if model.dist.lower()=='uniform' or model.dist.lower()=='saltellinormal':
-        (sampA, sampB)=sampDist(nSampSobol);                                     #Get both A and B samples so no repeated values
+        (sampA, sampB)=model.sampDist(nSampSobol);                                     #Get both A and B samples so no repeated values
     else:
-        sampA = sampDist(nSampSobol)
-        sampB = sampDist(nSampSobol)
+        sampA = model.sampDist(nSampSobol)
+        sampB = model.sampDist(nSampSobol)
     # Calculate matrices of QOI values for each POI sample matrix
-    fA = evalFcn(sampA).reshape([nSampSobol, model.nQOIs])  # nSampSobol x nQOI out matrix from A
-    fB = evalFcn(sampB).reshape([nSampSobol, model.nQOIs])  # nSampSobol x nQOI out matrix from B
+    fA = model.evalFcn(sampA).reshape([nSampSobol, model.nQOIs])  # nSampSobol x nQOI out matrix from A
+    fB = model.evalFcn(sampB).reshape([nSampSobol, model.nQOIs])  # nSampSobol x nQOI out matrix from B
     # Stack the output matrices into a single matrix
     fD = np.concatenate((fA.copy(), fB.copy()), axis=0)
 
@@ -431,9 +449,9 @@ def GetSamples(model,gsaOptions):
         sampAB = sampA.copy()
         sampAB[:, iParams] = sampB[:, iParams].copy()
         if model.nQOIs == 1:
-            fAB[:, iParams] = evalFcn(sampAB)
+            fAB[:, iParams] = model.evalFcn(sampAB)
         else:
-            fAB[:, iParams, :] = evalFcn(sampAB)  # nSampSobol x nPOI x nQOI tensor
+            fAB[:, iParams, :] = model.evalFcn(sampAB)  # nSampSobol x nPOI x nQOI tensor
         del sampAB
     return fA, fB, fAB, fD, np.concatenate((sampA.copy(), sampB.copy()), axis=0)
 
@@ -477,25 +495,18 @@ def CalculateSobol(fA, fB, fAB, fD):
     return sobolBase, sobolTot
 
 ##-------------------------------------GetMorris-------------------------------------------------------
-def CaclulateMorris():
-    #Determine axis #
-    if model.nQOIs==1:
-        axisNumber=1
-    else:
-        axisNumber=2
-
-    #Get Parameter Samples
-
+def CaclulateMorris(model,options):
+    #Get Parameter Samples- use parameter distribution
+    #morrisSamp=(sobol.sample(dimension=model.nPOIs, n_points=options.gsa.nSampMorris, skip=20001)-.5)*.4*model.basePOIs
+    morrisSamp=model.sampDist(options.gsa.nSampMorris)[0]
     #Calulate derivative indices
+    d= np.empty((model.nQOIs, model.nPOIs, options.gsa.nSampMorris)) #nQOIs x nPOIs x nSamples
+    for iSamp in range(0,options.gsa.nSampMorris):
+        d[:,:,iSamp]=GetJacobian(model.evalFcn, morrisSamp[iSamp,:],options.lsa,scale=False)
     
-    d= np.empty(model.nPOIs, model.nQOIs, options.gsa.nSampMorris)#nPOIs x nQOIs x nSamples
-    for iSamp in range(0,nSampMorris):
-        d[:,:,iSamp]=GetJacobian(model.evalFcn, morrisSamp[:,iSamp],lsaOptions,scale=False)
-    
-    #Compute Indices- all outputs are nPOIs x nQOIs
-    muStar=np.mean(np.abs(d),axis=axisNumber) 
-    mu=np.mean(d,axis=axisNumber)
-    sigma2=np.var(d, axis=axisNumber)
+    #Compute Indices- all outputs are nQOIs x nPOIs
+    muStar=np.mean(np.abs(d),axis=2)
+    sigma2=np.var(d, axis=2)
 
     return muStar, sigma2
 
