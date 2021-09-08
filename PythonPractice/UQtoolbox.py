@@ -24,11 +24,12 @@ import scipy.stats as sct
 #   -Subclasses: lsaOptions, plotOptions, gsaOptions
 #--------------------------------------lsaOptions------------------------------------------------
 class lsaOptions:
-    def __init__(self,run=True,  xDelta=10**(-12), method='complex', scale='y', subspaceRelTol=.001):
+    def __init__(self,run=True, runActiveSubspace=True, xDelta=10**(-12), method='complex', scale='y', subspaceRelTol=.001):
         self.run=run                              #Whether to run lsa (True or False)
         self.xDelta=xDelta                        #Input perturbation for calculating jacobian
         self.scale=scale                          #scale can be y, n, or both for outputing scaled, unscaled, or both
         self.method=method                        #method used for approximating derivatives
+        self.runActiveSubspace=runActiveSubspace
         self.subspaceRelTol=subspaceRelTol
         if not self.scale.lower() in ('y','n','both'):
             raise Exception('Error! Unrecgonized scaling output, please enter y, n, or both')
@@ -41,8 +42,9 @@ class lsaOptions:
     pass
 #--------------------------------------gsaOptions------------------------------------------------
 class gsaOptions:
-    def __init__(self, run=True, nSampSobol=100000, nSampMorris=4, lMorris=3):
-        self.run=run                            #Whether to run GSA (True or False)
+    def __init__(self, runSobol=True, runMorris=True, nSampSobol=100000, nSampMorris=4, lMorris=3):
+        self.runSobol=runSobol                            #Whether to run Sobol (True or False)
+        self.runMorris=runMorris                          #Whether to run Morris (True or False)
         self.nSampSobol = nSampSobol                      #Number of samples to be generated for GSA
         self.nSampMorris = nSampMorris
         self.lMorris=lMorris
@@ -189,12 +191,13 @@ def RunUQ(model, options):
         results.lsa = LSA(model, options)
 
     #Run Global Sensitivity Analysis
-    if options.gsa.run:
-        if options.lsa.run:
-            #Use a reduced model if it was caluclated
-            results.gsa=GSA(results.lsa.reducedModel, options)
-        else:
-            results.gsa = GSA(model, options)
+    # if options.gsa.run:
+        # if options.lsa.run:
+        #     #Use a reduced model if it was caluclated
+        #     results.gsa=GSA(results.lsa.reducedModel, options)
+        # else:
+
+    results.gsa = GSA(model, options)
 
     #Print Results
     if options.display:
@@ -207,7 +210,7 @@ def RunUQ(model, options):
         sys.stdout=original_stdout                              #Revert normal output path
 
     #Plot Samples
-    if options.gsa.run:
+    if options.gsa.runSobol:
         PlotGSA(model, results.gsa.sampD, results.gsa.fD, options)
 
     return results
@@ -232,7 +235,8 @@ def LSA(model, options):
     fisherMat=np.dot(np.transpose(jacRaw), jacRaw)
 
     #Active Subspace Analysis
-    reducedModel, activeSpace, inactiveSpace = GetActiveSubspace(model, options.lsa)
+    if options.lsa.runActiveSubspace:
+        reducedModel, activeSpace, inactiveSpace = GetActiveSubspace(model, options.lsa)
 
     #Collect Outputs and return as an lsa object
     return lsaResults(jacobian=jacRaw, rsi=jacRSI, fisher=fisherMat, reducedModel=reducedModel, activeSpace=activeSpace, inactiveSpace=inactiveSpace)
@@ -253,14 +257,23 @@ def GSA(model, options):
     model=GetSampDist(model, options.gsa)
 
     #Morris Screening
-    muStar, sigma2 = CaclulateMorris(model, options)
+    if options.gsa.runMorris:
+        muStar, sigma2 = CaclulateMorris(model, options)
+        results=gsaResults(muStar=muStar, sigma2=sigma2)
 
     #Sobol Analysis
-    #Make Distribution Samples and Calculate model results
-    [fA, fB, fAB, fD, sampD] = GetSamples(model, options.gsa)
-    #Calculate Sobol Indices
-    [sobolBase, sobolTot]=CalculateSobol(fA, fB, fAB, fD)
-    return gsaResults(fD=fD, fA=fA, fB=fB, fAB=fAB, sampD= sampD, sobolBase=sobolBase, sobolTot=sobolTot, muStar=muStar, sigma2=sigma2)
+    if options.gsa.runSobol:
+        #Make Distribution Samples and Calculate model results
+        [fA, fB, fAB, fD, sampD] = GetSamples(model, options.gsa)
+        #Calculate Sobol Indices
+        [sobolBase, sobolTot]=CalculateSobol(fA, fB, fAB, fD)
+        if options.gsa.runMorris:
+            results.fD=fD, results.fA=fA, results.fB=fB, results.fAB=fAB, results.sampD=sampD
+            results.sobolBase=sobolBase, results.sobolTot=sobolTot
+        else:
+            results=gsaResults(fD=fD, fA=fA, fB=fB, fAB=fAB, sampD= sampD, sobolBase=sobolBase, sobolTot=sobolTot)
+
+    return results
 
 def PrintResults(results,model,options):
     # Print Results

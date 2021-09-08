@@ -34,7 +34,6 @@ def main():
 
     # # Get model and options object from Example set
     [model, options] = uqExamples.GetExample('aluminum rod (uniform)')
-    options.gsa.run = True
     #
     # # [model, options] = uqExamples.GetExample('linear product')
     #
