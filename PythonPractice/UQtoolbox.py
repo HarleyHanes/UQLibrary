@@ -11,7 +11,7 @@ import warnings
 import matplotlib.pyplot as plt
 import scipy.integrate as integrate
 from tabulate import tabulate                       #Used for printing tables to terminal
-import sobol                                        #Used for generating sobol sequences
+#import sobol                                        #Used for generating sobol sequences
 import SALib.sample as sample
 import scipy.stats as sct
 #import seaborne as seaborne
@@ -24,12 +24,16 @@ import scipy.stats as sct
 #   -Subclasses: lsaOptions, plotOptions, gsaOptions
 #--------------------------------------lsaOptions------------------------------------------------
 class lsaOptions:
-    def __init__(self,run=True, runActiveSubspace=True, xDelta=10**(-12), method='complex', scale='y', subspaceRelTol=.001):
+    def __init__(self,run=True, runActiveSubspace=True, xDelta=10**(-12),\
+                 method='complex', scale='y', subspaceRelTol=.001):
         self.run=run                              #Whether to run lsa (True or False)
         self.xDelta=xDelta                        #Input perturbation for calculating jacobian
         self.scale=scale                          #scale can be y, n, or both for outputing scaled, unscaled, or both
         self.method=method                        #method used for approximating derivatives
-        self.runActiveSubspace=runActiveSubspace
+        if self.run == False:
+            self.runActiveSubspace = False
+        else:
+            self.runActiveSubspace=runActiveSubspace
         self.subspaceRelTol=subspaceRelTol
         if not self.scale.lower() in ('y','n','both'):
             raise Exception('Error! Unrecgonized scaling output, please enter y, n, or both')
@@ -42,9 +46,15 @@ class lsaOptions:
     pass
 #--------------------------------------gsaOptions------------------------------------------------
 class gsaOptions:
-    def __init__(self, runSobol=True, runMorris=True, nSampSobol=100000, nSampMorris=4, lMorris=3):
-        self.runSobol=runSobol                            #Whether to run Sobol (True or False)
-        self.runMorris=runMorris                          #Whether to run Morris (True or False)
+    def __init__(self, run = True, runSobol=True, runMorris=True, nSampSobol=100000, \
+                 nSampMorris=4, lMorris=3):
+        self.run = run
+        if self.run == False:
+            self.runSobol = False
+            self.runMorris = False
+        else:
+            self.runSobol=runSobol                            #Whether to run Sobol (True or False)
+            self.runMorris=runMorris                          #Whether to run Morris (True or False)
         self.nSampSobol = nSampSobol                      #Number of samples to be generated for GSA
         self.nSampMorris = nSampMorris
         self.lMorris=lMorris
@@ -59,7 +69,8 @@ class plotOptions:
 #--------------------------------------uqOptions------------------------------------------------
 #   Class holding the above options subclasses
 class uqOptions:
-    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions(), display=True, save=False, path='..'):
+    def __init__(self,lsa=lsaOptions(),plot=plotOptions(),gsa=gsaOptions(), \
+                 display=True, save=False, path='..'):
         self.lsa=lsa
         self.plot=plot
         self.gsa=gsa
@@ -76,7 +87,8 @@ class uqOptions:
 class model:
     #Model sets should be initialized with base parameter settings, covariance Matrix, and eval function that
     #   takes in a vector of POIs and outputs a vector of QOIs
-    def __init__(self,basePOIs=np.empty(0), POInames = np.empty(0), QOInames= np. empty(0), cov=np.empty(0), \
+    def __init__(self,basePOIs=np.empty(0), POInames = np.empty(0), \
+                 QOInames= np. empty(0), cov=np.empty(0), \
                  evalFcn=np.empty(0), dist='unif',distParms='null'):
         self.basePOIs=basePOIs
         if not isinstance(self.basePOIs,np.ndarray):                    #Confirm that basePOIs is a numpy array
@@ -101,6 +113,7 @@ class model:
         self.baseQOIs=evalFcn(basePOIs)
         if not isinstance(self.baseQOIs,np.ndarray):                    #Confirm that baseQOIs is a numpy array
             warnings.warn("model.baseQOIs is not a numpy array")
+        print(self.baseQOIs)
         self.nQOIs=len(self.baseQOIs)
         #Assign QOI names
         self.QOInames = QOInames
@@ -125,6 +138,10 @@ class model:
                     self.distParms=[[1],[.2]]*np.ones((2,self.nPOIs))*self.basePOIs
                 else:
                     self.distParms=[self.basePOIs, np.diag(self.cov,k=0)]
+            elif distParms.lower() == 'null':
+                self.distParms = distParms
+            else:
+                raise Exception("Unrecognized entry for distParms: " + str(distParms))
 
         else:
             self.distParms=distParms
@@ -196,8 +213,8 @@ def RunUQ(model, options):
         #     #Use a reduced model if it was caluclated
         #     results.gsa=GSA(results.lsa.reducedModel, options)
         # else:
-
-    results.gsa = GSA(model, options)
+    if options.gsa.run:
+        results.gsa = GSA(model, options)
 
     #Print Results
     if options.display:
@@ -205,12 +222,12 @@ def RunUQ(model, options):
 
     if options.save:
         original_stdout = sys.stdout                            #Save normal output path
-        sys.stdout=open(options.path + '\\Results.txt', 'a+')            #Change output path to results file
+        sys.stdout=open(options.path + 'Results.txt', 'a+')            #Change output path to results file
         PrintResults(results,model,options)                     #Print results to file
         sys.stdout=original_stdout                              #Revert normal output path
 
     #Plot Samples
-    if options.gsa.runSobol:
+    if options.gsa.runSobol & options.gsa.run:
         PlotGSA(model, results.gsa.sampD, results.gsa.fD, options)
 
     return results
@@ -237,9 +254,14 @@ def LSA(model, options):
     #Active Subspace Analysis
     if options.lsa.runActiveSubspace:
         reducedModel, activeSpace, inactiveSpace = GetActiveSubspace(model, options.lsa)
+        #Collect Outputs and return as an lsa object
+        return lsaResults(jacobian=jacRaw, rsi=jacRSI, fisher=fisherMat,\
+                          reducedModel=reducedModel, activeSpace=activeSpace,\
+                          inactiveSpace=inactiveSpace)
+    else:
+        return lsaResults(jacobian=jacRaw, rsi=jacRSI, fisher=fisherMat)
 
-    #Collect Outputs and return as an lsa object
-    return lsaResults(jacobian=jacRaw, rsi=jacRSI, fisher=fisherMat, reducedModel=reducedModel, activeSpace=activeSpace, inactiveSpace=inactiveSpace)
+    
 
 
 
@@ -268,8 +290,13 @@ def GSA(model, options):
         #Calculate Sobol Indices
         [sobolBase, sobolTot]=CalculateSobol(fA, fB, fAB, fD)
         if options.gsa.runMorris:
-            results.fD=fD, results.fA=fA, results.fB=fB, results.fAB=fAB, results.sampD=sampD
-            results.sobolBase=sobolBase, results.sobolTot=sobolTot
+            results.fD=fD
+            results.fA=fA
+            results.fB=fB
+            results.fAB=fAB
+            results.sampD=sampD
+            results.sobolBase=sobolBase
+            results.sobolTot=sobolTot
         else:
             results=gsaResults(fD=fD, fA=fA, fB=fB, fAB=fAB, sampD= sampD, sobolBase=sobolBase, sobolTot=sobolTot)
 
@@ -297,28 +324,31 @@ def PrintResults(results,model,options):
         print(results.lsa.activeSpace)
         print('\n Inactive Supspace')
         print(results.lsa.inactiveSpace)
-    if options.gsa.run:
-        if model.nQOIs==1:
-            print('\n Sobol Indices for ' + model.QOInames[0])
-            print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1), results.gsa.sobolBase.reshape(model.nPOIs,1), \
-                                           results.gsa.sobolTot.reshape(model.nPOIs,1)), 1),
-                           headers=["", "1st Order", "Total Sensitivity"]))
-
-            print('\n Morris Screening Results for' + model.QOInames[0])
-            print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs, 1), results.gsa.muStar.reshape(model.nPOIs, 1), \
-                                           results.gsa.sigma2.reshape(model.nPOIs, 1)), 1),
-                headers=["", "muStar", "sigma2"]))
-        else:
-            for iQOI in range(0,model.nQOIs):
-                print('\n Sobol Indices for '+ model.QOInames[iQOI])
-                print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.gsa.sobolBase[[iQOI],:].reshape(model.nPOIs,1), \
-                    results.gsa.sobolTot[[iQOI],:].reshape(model.nPOIs,1)),1), headers = ["", "1st Order", "Total Sensitivity"]))
-
+    if options.gsa.run: 
+        if options.gsa.runSobol:
+            if model.nQOIs==1:
+                print('\n Sobol Indices for ' + model.QOInames[0])
+                print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1), results.gsa.sobolBase.reshape(model.nPOIs,1), \
+                                               results.gsa.sobolTot.reshape(model.nPOIs,1)), 1),
+                               headers=["", "1st Order", "Total Sensitivity"]))
+            else:
+                for iQOI in range(0,model.nQOIs):
+                    print('\n Sobol Indices for '+ model.QOInames[iQOI])
+                    print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs,1),results.gsa.sobolBase[[iQOI],:].reshape(model.nPOIs,1), \
+                        results.gsa.sobolTot[[iQOI],:].reshape(model.nPOIs,1)),1), headers = ["", "1st Order", "Total Sensitivity"]))
+    
+        if options.gsa.runMorris:
+            if model.nQOIs==1:
+                print('\n Morris Screening Results for' + model.QOInames[0])
+                print(tabulate(np.concatenate((model.POInames.reshape(model.nPOIs, 1), results.gsa.muStar.reshape(model.nPOIs, 1), \
+                                               results.gsa.sigma2.reshape(model.nPOIs, 1)), 1),
+                    headers=["", "muStar", "sigma2"]))
+            else:
                 print('\n Morris Screening Results for' + model.QOInames[iQOI])
                 print(tabulate(np.concatenate(
                     (model.POInames.reshape(model.nPOIs, 1), results.gsa.muStar[[iQOI], :].reshape(model.nPOIs, 1), \
                      results.gsa.sigma2[[iQOI], :].reshape(model.nPOIs, 1)), 1),
-                               headers=["", "muStar", "sigma2"]))
+                    headers=["", "muStar", "sigma2"]))
 
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Support Functions----------------------------------------
@@ -597,7 +627,7 @@ def PlotGSA(model, sampleMat, evalMat, options):
                 axes[iPOI,jPOI].set_ylabel('Instances')
     figure.tight_layout()
     if options.path:
-        plt.savefig(options.path+"\\POIcorrelation")
+        plt.savefig(options.path+"POIcorrelation.png")
 
     #Plot QOI-QOI correlationa and distributions
     figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nQOIs, squeeze=False)
@@ -615,7 +645,7 @@ def PlotGSA(model, sampleMat, evalMat, options):
                 axes[iQOI,jQOI].set_ylabel('Instances')
     figure.tight_layout()
     if options.path:
-        plt.savefig(options.path+"\\QOIcorrelation")
+        plt.savefig(options.path+"QOIcorrelation.png")
 
     #Plot POI-QOI correlation
     figure, axes=plt.subplots(nrows=model.nQOIs, ncols= model.nPOIs, squeeze=False)
@@ -627,7 +657,7 @@ def PlotGSA(model, sampleMat, evalMat, options):
             if iQOI==model.nQOIs-1:
                 axes[iQOI,jPOI].set_xlabel(model.POInames[jPOI])
     if options.path:
-        plt.savefig(options.path+"\\POI_QOIcorrelation")
+        plt.savefig(options.path+"POI_QOIcorrelation.png")
     #Display all figures
     if options.display:
         plt.show()
@@ -675,6 +705,6 @@ def TestAccuracy(model,options,nSampSobol):
     axes[1,1].set_xlabel('Number of Samples')
     figure.tight_layout()
     if options.path:
-        plt.savefig(options.path+"\\SobolConvergence")
+        plt.savefig(options.path+"SobolConvergence.png")
     plt.show()
     return (baseSobol,totalSobol)
