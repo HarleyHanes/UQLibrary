@@ -33,7 +33,7 @@ def main():
 
 
     # # Get model and options object from Example set
-    [model, options] = uqExamples.GetExample('aluminum rod (uniform)')
+    # [model, options] = uqExamples.GetExample('aluminum rod (uniform)')
     #
     # # [model, options] = uqExamples.GetExample('linear product')
     #
@@ -42,7 +42,7 @@ def main():
     #f
     # [model, options] = uqExamples.GetExample('aluminum rod (normal)')
     #
-    # [model, options] = uqExamples.GetExample('trial function')
+    [model, options] = uqExamples.GetExample('trial function')
     #
     # # Run UQ package
     # (baseSobol,totalSobol)= uq.TestAccuracy(model, options, np.arange(start=10000, stop=200000, step=5000))
