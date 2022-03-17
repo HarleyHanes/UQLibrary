@@ -1,12 +1,7 @@
 
 
-from SALib.sample import saltelli
-from SALib.analyze import sobol
-from SALib.test_functions import Ishigami
-import UQtoolbox as uq
-import UQtoolbox_examples as uqExamples
-import numpy as np
-import matplotlib.pyplot as plt
+import UQLibrary as uq
+#import mpi4py.MPI as MPI
 
 def main():
     # #Set seed for reporducibility
@@ -42,11 +37,16 @@ def main():
     #f
     # [model, options] = uqExamples.GetExample('aluminum rod (normal)')
     #
-    [model, options] = uqExamples.GetExample('trial function')
+    print("Loading Example: Ishigami function with Low Discrepency Normal Distribution")
+    [model, options] = uq.examples.GetExample('ishigami (normal)')
+    options.lsa.run_param_subset = False
+    options.display = True
+    options.save = True
+    #options.plot = True
     #
     # # Run UQ package
     # (baseSobol,totalSobol)= uq.TestAccuracy(model, options, np.arange(start=10000, stop=200000, step=5000))
-    results = uq.RunUQ(model, options)
+    results = uq.run_uq(model, options, logging = 0)
     #
     # plt.plot(results.gsa.sampD[:450,0], results.gsa.sampD[:450,1],'rs')
     # plt.plot(results.gsa.sampD[options.gsa.nSamp:options.gsa.nSamp+450,0], results.gsa.sampD[options.gsa.nSamp:options.gsa.nSamp+450,1],'bo')
