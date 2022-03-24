@@ -121,24 +121,25 @@ class Model:
         if type(name_qoi)==np.ndarray:
             #Check data type
             if name_qoi.size!= self.n_qoi:
-                raise Exception("Incorrect number of entries in name_qoi")
+                warnings.warn("Incorrect number of entries in name_qoi, using automatic")
+                name_qoi = "auto"
         elif type(name_qoi)==list:
             #Check data type
             if len(name_qoi)!= self.n_qoi:
-                raise Exception("Incorrect number of entries in name_qoi")
-            name_qoi=np.array(name_qoi)
+                warnings.warn("Incorrect number of entries in name_qoi, using automatic")
+                name_qoi = "auto"
+            else: 
+                name_qoi=np.array(name_qoi)
         elif type(name_qoi)==str and name_qoi.lower()!="auto":
             if self.n_qoi!=1:
-                raise Exception("Only one qoi name entered for >1 qois")
+                warnings.warn("Incorrect number of entries in name_qoi, using automatic")
+                name_qoi = "auto"
+            else :
+                name_qoi = np.array(name_qoi)
         else :
             if name_qoi.lower()!= "auto":
                 warnings.warn("Unrecognized name_qoi entry, using automatic values")
             name_qoi= name_qoi_auto
-        if (name_qoi.size !=self.n_qoi) & (name_qoi.size !=0):    #Check names if given match number of QOIs
-            warnings.warn("name_qoi entered but the number of names does not match the number of QOIs. Ignoring names.")
-            name_qoi = name_qoi_auto
-        if name_qoi.size==0:                                 #If not given or incorrect size, number QOIs
-            name_qoi = name_qoi_auto
         self.name_qoi = name_qoi
         del name_qoi
             

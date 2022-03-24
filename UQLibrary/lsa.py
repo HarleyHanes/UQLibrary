@@ -251,7 +251,7 @@ def get_active_subset(eval_fcn, base_poi, base_qoi, name_poi, name_qoi,\
             fisher_mat=np.dot(np.transpose(jac), jac)
             ident_values, ident_vectors =np.linalg.eig(fisher_mat)
         elif decomp_method.lower() == "svd":
-            u, ident_values, ident_vectors = np.linalg.svd(jac)
+            u, ident_values, ident_vectors = np.linalg.svd(jac, full_matrices = False)
             if logging >1 : 
                 print("Identifiability Values: " + str(ident_values))
                 print("Identifiability Vectors: "  + str(ident_vectors))
