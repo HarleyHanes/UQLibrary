@@ -16,42 +16,51 @@ import sys
 #import scipy.stats as sct
 
 class LsaOptions:
-    def __init__(self,run=True, run_param_subset=True, x_delta=10**(-12),\
-                 method='complex', scale='y', subset_rel_tol=.001):
+    def __init__(self,run=True, run_lsa = True, run_param_subset=True, x_delta=10**(-12),\
+                 deriv_method='complex', scale='y', subset_rel_tol=.001,\
+                 decomp_method = "svd"):
+        #----------------------------Run Selections----------------------------
         self.run=run                              #Whether to run lsa (True or False)
-        self.x_delta=x_delta                        #Input perturbation for calculating jacobian
-        self.scale=scale                          #scale can be y, n, or both for outputing scaled, unscaled, or both
-        self.method=method                        #method used for approximating derivatives
         if self.run == False:
             self.run_param_subset = False
+            self.run_lsa= False
         else:
             self.run_param_subset=run_param_subset
-        self.subset_rel_tol=subset_rel_tol
-        if not self.scale.lower() in ('y','n','both'):
-            raise Exception('Error! Unrecgonized scaling output, please enter y, n, or both')
-        if not self.method.lower() in ('complex','finite'):
+            self.run_lsa = run_lsa
+        #-------------------------Derivative Calculations----------------------
+        self.x_delta=x_delta                      #Input perturbation for calculating jacobian
+        self.deriv_method=deriv_method                        #method used for approximating derivatives
+        if not self.deriv_method.lower() in ('complex','finite'):
             raise Exception('Error! unrecognized derivative approx method. Use complex or finite')
         if self.x_delta<0 or not isinstance(self.x_delta,float):
             raise Exception('Error! Non-compatibale x_delta, please use a positive floating point number')
+        #-----------------------Parameter Subset Selection---------------------
+        self.subset_rel_tol=subset_rel_tol
+        self.decomp_method = decomp_method
         if self.subset_rel_tol<0 or self.subset_rel_tol>1 or not isinstance(self.x_delta,float):
             raise Exception('Error! Non-compatibale x_delta, please use a positive floating point number less than 1')
+        if not self.decomp_method.lower() in ('svd', 'eigen'):
+            raise Exception('Error! Unrecongnized decomposition method, use svd or eigen.')
     pass
 
 
 ##--------------------------------------LSA-----------------------------------------------------
 # Local Sensitivity Analysis main
 class LsaResults:
-    def __init__(self,jacobian=np.empty, rsi=np.empty, fisher=np.empty, reduced_model=np.empty, active_set="", inactive_set=""):
+    def __init__(self,jacobian=np.empty, rsi=np.empty, fisher=np.empty,
+                 active_set="", inactive_set="", ident_values = np.empty,\
+                 ident_vectors=np.empty):
         self.jac=jacobian
         self.rsi=rsi
         self.fisher=fisher
-        self.reduced_model=reduced_model
         self.active_set=active_set
         self.inactive_set=inactive_set
+        self.ident_values = ident_values
+        self.ident_vectors = ident_vectors
     pass
 
 
-def run_lsa(model, lsa_options):
+def run_lsa(model, lsa_options, logging = 0):
     """Implements local sensitivity analysis using LSI, RSI, and parameter subset reduction.
     
     Parameters
@@ -74,22 +83,31 @@ def run_lsa(model, lsa_options):
     # Outputs: Object of class lsa with Jacobian, RSI, and Fisher information matrix
 
     # Calculate Jacobian
-    jac_raw=get_jacobian(model.eval_fcn, model.base_poi, lsa_options.x_delta,\
-                         lsa_options.method, scale=False, y_base=model.base_qoi)
-    # Calculate relative sensitivity index (RSI)
-    jac_rsi=get_jacobian(model.eval_fcn, model.base_poi, lsa_options.x_delta,\
-                         lsa_options.method, scale=True, y_base=model.base_qoi)
-    # Calculate Fisher Information Matrix from jacobian
-    fisher_mat=np.dot(np.transpose(jac_raw), jac_raw)
+    if lsa_options.run_lsa:
+        jac_raw=get_jacobian(model.eval_fcn, model.base_poi, lsa_options.x_delta,\
+                             lsa_options.deriv_method, scale=False, y_base=model.base_qoi)
+        # Calculate relative sensitivity index (RSI)
+        jac_rsi=get_jacobian(model.eval_fcn, model.base_poi, lsa_options.x_delta,\
+                             lsa_options.deriv_method, scale=True, y_base=model.base_qoi)
+        # Calculate Fisher Information Matrix from jacobian
+        fisher_mat=np.dot(np.transpose(jac_raw), jac_raw)
 
     #Active Subspace Analysis
     if lsa_options.run_param_subset:
-        reduced_model, active_set, inactive_set = get_active_subset(model, lsa_options)
+        active_set, inactive_set, ident_values, ident_vectors = \
+            get_active_subset(model.eval_fcn, model.base_poi, model.base_qoi, \
+                              model.name_poi, model. name_qoi, lsa_options.decomp_method,\
+                              lsa_options.subset_rel_tol, lsa_options.x_delta, \
+                              lsa_options.deriv_method, logging = logging)
         #Collect Outputs and return as an lsa object
+    if lsa_options.run_lsa and lsa_options.run_param_subset:
         return LsaResults(jacobian=jac_raw, rsi=jac_rsi, fisher=fisher_mat,\
-                          reduced_model=reduced_model, active_set=active_set,\
-                          inactive_set=inactive_set)
-    else:
+                          active_set=active_set, inactive_set=inactive_set,\
+                          ident_values = ident_values, ident_vectors = ident_vectors)
+    elif lsa_options.run_param_subset and not lsa_options.run_lsa:
+        return LsaResults(active_set=active_set, inactive_set=inactive_set,\
+                          ident_values = ident_values, ident_vectors = ident_vectors)
+    elif lsa_options.run_lsa and not lsa_options.run_param_subset:
         return LsaResults(jacobian=jac_raw, rsi=jac_rsi, fisher=fisher_mat)
     
 ###----------------------------------------------------------------------------------------------
@@ -100,7 +118,7 @@ def run_lsa(model, lsa_options):
     
   
 ##--------------------------------------GetJacobian-----------------------------------------------------
-def get_jacobian(eval_fcn, x_base, x_delta, method, **kwargs):
+def get_jacobian(eval_fcn, x_base, x_delta, deriv_method, **kwargs):
     """Calculates scaled or unscaled jacobian using different derivative approximation methods.
     
     Parameters
@@ -171,17 +189,17 @@ def get_jacobian(eval_fcn, x_base, x_delta, method, **kwargs):
 
     for i_poi in range(0, n_poi):                                            # Loop through POIs
         # Isolate Parameters
-        if method.lower()== 'complex':
+        if deriv_method.lower()== 'complex':
             xPert = x_base + np.zeros(shape=x_base.shape)*1j                  # Initialize Complex Perturbed input value
             xPert[i_poi] += x_delta * 1j                                      # Add complex Step in input
-        elif method.lower() == 'finite':
+        elif deriv_method.lower() == 'finite':
             xPert = x_base.copy()
             xPert[i_poi] += x_delta
         yPert = eval_fcn(xPert)                                        # Calculate perturbed output
         for i_qoi in range(0, n_qoi):                                        # Loop through QOIs
-            if method.lower()== 'complex':
+            if deriv_method.lower()== 'complex':
                 jac[i_qoi, i_poi] = np.imag(yPert[i_qoi] / x_delta)                 # Estimate Derivative w/ 2nd order complex
-            elif method.lower() == 'finite':
+            elif deriv_method.lower() == 'finite':
                 jac[i_qoi, i_poi] = (yPert[i_qoi]-y_base[i_qoi]) / x_delta
             #Only Scale Jacobian if 'scale' value is passed True in function call
             if scale:
@@ -194,7 +212,9 @@ def get_jacobian(eval_fcn, x_base, x_delta, method, **kwargs):
 
 
 ##--------------------------------------------Parameter dimension reduction------------------------------------------------------
-def get_active_subset(model,lsa_options):
+def get_active_subset(eval_fcn, base_poi, base_qoi, name_poi, name_qoi,\
+                      decomp_method, subset_rel_tol, x_delta, deriv_method,
+                      logging =0):
     """Calculates active and inactive parameter subsets.
         --Not fully function, reduced model is still full model
     
@@ -215,19 +235,35 @@ def get_active_subset(model,lsa_options):
         Data type string of inactive parameters
     """
     eliminate=True
-    inactive_index=np.zeros(model.n_poi)
+    n_poi = base_poi.size
+    inactive_index=np.zeros(n_poi)
     #Calculate Jacobian
-    jac=get_jacobian(model.eval_fcn, model.base_poi, lsa_options.x_delta,\
-                         lsa_options.method, scale=False, y_base=model.base_qoi)
+    jac=get_jacobian(eval_fcn, base_poi, x_delta,\
+                         deriv_method, scale=False, y_base=base_qoi)
+    first_pass = True
+    #Inititalize lists that hold the values and vectors at each iteration
+    ident_values_stored = []
+    ident_vectors_stored = []
     while eliminate:
-        #Caclulate Fisher
-        fisher_mat=np.dot(np.transpose(jac), jac)
         #Perform Eigendecomp
-        eigen_values, eigen_vectors =np.linalg.eig(fisher_mat)
+        if decomp_method.lower() == "eigen":
+            #Caclulate Fisher
+            fisher_mat=np.dot(np.transpose(jac), jac)
+            ident_values, ident_vectors =np.linalg.eig(fisher_mat)
+        elif decomp_method.lower() == "svd":
+            u, ident_values, ident_vectors = np.linalg.svd(jac)
+            if logging >1 : 
+                print("Identifiability Values: " + str(ident_values))
+                print("Identifiability Vectors: "  + str(ident_vectors))
+            
+        ident_values_stored.append(ident_values)
+        ident_vectors_stored.append(ident_vectors)
+            
+        
         #Eliminate dimension/ terminate
-        if np.min(eigen_values) < lsa_options.subset_rel_tol * np.max(eigen_values):
+        if np.min(ident_values) < subset_rel_tol * np.max(ident_values):
             #Get inactive parameter
-            inactive_param_reduced_index=np.argmax(np.absolute(eigen_vectors[:, np.argmin(np.absolute(eigen_values))]))
+            inactive_param_reduced_index=np.argmax(np.absolute(ident_vectors[:, np.argmin(np.absolute(ident_values))]))
             inactive_param=inactive_param_reduced_index+np.sum(inactive_index[0:(inactive_param_reduced_index+1)]).astype(int)
                 #This indexing may seem odd but its because we're keeping the full model parameter numbering while trying
                 # to index within the reduced model so we have to add to the index the previously removed params
@@ -238,19 +274,20 @@ def get_active_subset(model,lsa_options):
         else:
             #Terminate Active Subspace if singular values within tolerance
             eliminate=False
+        first_pass = False
             
     #Define active and inactive spaces
-    active_set=model.name_poi[inactive_index == False]
-    inactive_set=model.name_poi[inactive_index == True]
+    active_set=name_poi[inactive_index == False]
+    inactive_set=name_poi[inactive_index == True]
     
-    reduced_model = model_reduction(model, inactive_param)
+    # reduced_model = model_reduction(model, inactive_param)
     # reduced_model.base_poi=reduced_model.base_poi[inactive_index == False]
     # reduced_model.name_poi=reduced_model.name_poi[inactive_index == False]
     # reduced_model.eval_fcn = lambda reduced_poi: model.eval_fcn(
     #     np.array([x for x, y in zip(reduced_poi,model.base_poi) if inactive_index== True]))
     # #reduced_model.eval_fcn=lambda reduced_poi: model.eval_fcn(np.where(inactive_index==False, reduced_poi, model.base_poi))
     # reduced_model.base_qoi=reduced_model.eval_fcn(reduced_model.base_poi)
-    return reduced_model, active_set, inactive_set
+    return active_set, inactive_set, ident_values_stored, ident_vectors_stored
 
 def model_reduction(model,inactive_param):
     """Computes a new Model object using only active parameter set"

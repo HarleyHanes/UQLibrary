@@ -34,19 +34,20 @@ def GetExample(example, **kwargs):
         options.gsa.nSampSobol=100               # Keep normal sampling but reduce sample size to 100
     
     elif example.lower() == 'helmholtz':
-        baseEvalPoints = np.arange(0, .801, .05)
+        baseEvalPoints = np.linspace(0,1,100)
         model = uq.Model(eval_fcn=lambda params: HelmholtzEnergy(baseEvalPoints, params),
                          base_poi=np.array([-392.66, 770.1, 57.61]),
                          cov=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
                                        [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
                                        [0.4021, -2.4078, 3.0493]]) * (10 ** 3),
-                         poi_name = np.array(["alpha1", "alpha11", "alpha111"]),
+                         name_poi = np.array(["alpha1", "alpha11", "alpha111"]),
                          dist_type='uniform')  # Use uniform sampling of +-20% nominal value
         model.dist_param = np.array([[.8, .8, .8], [1.2, 1.2, 1.2]]) * model.base_poi
         options.gsa.nSampSobol=10000              # Keep normal sampling but reduce sample size to 100
     
     elif example.lower() == 'integrated helmholtz':
-        model = uq.Model(eval_fcn=lambda params: IntegratedHelmholtzEnergy(np.arange(0,.8,.06), params),
+        baseEvalPoints=np.arange(0,.8,.06)
+        model = uq.Model(eval_fcn=lambda params: IntegratedHelmholtzEnergy(baseEvalPoints, params),
                          base_poi=np.array([-389.4, 761.3, 61.5]),
                          cov=np.array([[0.0990, - 0.4078, 0.4021],  # Covaraince matrix calculated by DRAMs
                                        [-0.4078, 2.0952, -2.4078],  # at baseParams and basEvalPoints
@@ -68,7 +69,7 @@ def GetExample(example, **kwargs):
                          base_poi=np.array([0, 0, 0]),
                          dist_type="saltelli uniform",
                          dist_param=np.array([[-math.pi, -math.pi, -math.pi], [math.pi, math.pi, math.pi]]))
-        options.lsa.method = 'finite' 
+        options.lsa.deriv_method = 'finite' 
         options.lsa.xDelta = 10**(-6)
         options.gsa.nSampSobol = 500000          # Use default number of samples
         
@@ -77,7 +78,7 @@ def GetExample(example, **kwargs):
                          base_poi=np.array([0, 0, 0]),
                          dist_type="saltelli normal",
                          dist_param=np.array([[0, 0, 0], [(2*math.pi)**2/12, (2*math.pi)**2/12, (2*math.pi)**2/12]]))
-        options.lsa.method = 'finite' 
+        options.lsa.deriv_method = 'finite' 
         options.lsa.xDelta = 10**(-6)
         options.gsa.nSampSobol= 500000 
         
@@ -145,7 +146,7 @@ def GetExample(example, **kwargs):
                          dist_type='uniform',
                          dist_param=np.array([[0, 0], [1, 1]])
                          )
-        options.lsa.method='finite'
+        options.lsa.deriv_method='finite'
         options.lsa.xDelta=.00001
     elif example.lower() == 'sir enedmic':
             model = uq.Model(eval_fcn = lambda params: SIR_endemic_integrated(params, np.array([900, 100, 0]), 20),

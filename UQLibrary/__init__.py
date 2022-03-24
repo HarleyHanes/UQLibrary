@@ -259,7 +259,7 @@ def run_uq(model, options, logging = False):
     if mpi_rank == 0 and options.lsa.run:
         if logging: 
             print("Starting LSA")
-        results.lsa = lsa.run_lsa(model, options.lsa)
+        results.lsa = lsa.run_lsa(model, options.lsa, logging = logging)
         #---------------Broadcast results.lsa to other threads-----------
 
     #Run Global Sensitivity Analysis
@@ -294,10 +294,13 @@ def run_uq(model, options, logging = False):
                      base_response = model.base_qoi)
 
     #Plot Samples
-    if options.gsa.run_sobol and options.gsa.run and options.plot and mpi_rank == 0:
+    if options.plot:
         if logging: 
             print("Plotting Results")
-        plot_gsa(model, results.gsa.samp_d, results.gsa.f_d, options)
+        if options.lsa.run_param_subset and mpi_rank == 0:
+            plot_lsa(model, results.lsa.ident_values, options)
+        if options.gsa.run_sobol and options.gsa.run  and mpi_rank == 0:
+            plot_gsa(model, results.gsa.samp_d, results.gsa.f_d, options)
 
     return results
 
@@ -320,23 +323,31 @@ def print_results(results,model,options):
     #print('Sensitivity results for nSampSobol=' + str(options.gsa.n_samp_sobol))
     #Local Sensitivity Analysis
     if options.lsa.run:
-        print('\n Base POI Values')
-        print(tabulate([model.base_poi], headers=model.name_poi))
-        print('\n Base QOI Values')
-        print(tabulate([model.base_qoi], headers=model.name_qoi))
-        print('\n Sensitivity Indices')
-        print(tabulate(np.concatenate((model.name_poi.reshape(model.n_poi,1),np.transpose(results.lsa.jac)),1),
-              headers= np.append("",model.name_qoi)))
-        print('\n Relative Sensitivity Indices')
-        print(tabulate(np.concatenate((model.name_poi.reshape(model.n_poi,1),np.transpose(results.lsa.rsi)),1),
-              headers= np.append("",model.name_qoi)))
-        #print("Fisher Matrix: " + str(results.lsa.fisher))
+        if options.lsa.run_lsa:
+            print('Local Sensitivity Analysis using ' + options.lsa.deriv_method \
+                  + ' approximation and h=' + str(options.lsa.x_delta))
+            print('Base POI Values')
+            print(tabulate([model.base_poi], headers=model.name_poi))
+            print('\n Base QOI Values')
+            print(tabulate([model.base_qoi], headers=model.name_qoi))
+            print('\n Sensitivity Indices')
+            print(tabulate(np.concatenate((model.name_poi.reshape(model.n_poi,1),np.transpose(results.lsa.jac)),1),
+                  headers= np.append("",model.name_qoi)))
+            print('\n Relative Sensitivity Indices')
+            print(tabulate(np.concatenate((model.name_poi.reshape(model.n_poi,1),np.transpose(results.lsa.rsi)),1),
+                  headers= np.append("",model.name_qoi)))
+            #print("Fisher Matrix: " + str(results.lsa.fisher))
         #Active Subsapce Analysis
         if options.lsa.run_param_subset:
-            print('\n Active Supspace')
+            print('\nParameter Subset selection using ' + options.lsa.decomp_method +\
+                  ' decomposition and tolerance ' + str(options.lsa.subset_rel_tol))
+            print('Active Supspace')
             print(results.lsa.active_set)
-            print('\n Inactive Supspace')
+            print('\nInactive Supspace')
             print(results.lsa.inactive_set)
+            print('\nIdentifiability Values')
+            for i_sim in range(len(results.lsa.ident_values)):
+                print('Pass ' + str(i_sim+1) + ': ' + str(results.lsa.ident_values[i_sim]))
     if options.gsa.run: 
         if options.gsa.run_sobol:
             if model.n_qoi==1:
@@ -367,14 +378,30 @@ def print_results(results,model,options):
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Support Functions----------------------------------------
 ###----------------------------------------------------------------------------------------------
+def plot_lsa(model, ident_values, options):
+    """Plots Identifiability singular values results from lsa module.
+    
+    Parameters
+    ----------
+    model : Model
+        Object of class Model holding run information.
+    sample_mat: np.ndarray
+        n_samp x n_poi array holding each parameter sample
+    eval_mat : np.ndarray
+        n_samp x n_qoi array holding each function evaluation
+    options : Options
+        Object of class Options holding run settings.
+    """
+    fig = plt.figure()
+    for i_sim in range(len(ident_values)):
+        plt.semilogy(ident_values[i_sim], label = 'Iteration %i' % i_sim)
+    fig.tight_layout()
+    plt.xlabel('Identifiability Value ('+ options.lsa.decomp_method + ')')
+    plt.legend()
+    
+    plt.savefig(options.path+"identifiability_values.png")
+    
 
-
-##--------------------------------------GetSobol------------------------------------------------------
-# GSA Component Functions
-
-
-#
-#
 def plot_gsa(model, sample_mat, eval_mat, options):
     """Plots Sobol Sampling results from gsa module.
     
