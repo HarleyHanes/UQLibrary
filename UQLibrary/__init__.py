@@ -346,6 +346,8 @@ def print_results(results,model,options):
             print(results.lsa.active_set)
             print('\nInactive Supspace')
             print(results.lsa.inactive_set)
+            print('\nReduction Order')
+            print(results.lsa.reduction_order)
             print('\nIdentifiability Values')
             for i_sim in range(len(results.lsa.ident_values)):
                 print('Pass ' + str(i_sim+1) + ': ' + str(results.lsa.ident_values[i_sim]))
@@ -397,6 +399,12 @@ def plot_lsa(model, ident_values, options):
     for i_sim in range(len(ident_values)):
         plt.semilogy(ident_values[i_sim], label = 'Iteration %i' % i_sim)
     fig.tight_layout()
+    if options.lsa.decomp_method.lower() == "svd":
+        plt.ylabel("Singular Value Magnitude")
+        plt.xlabel("Singular Value Number")
+    elif options.lsa.decomp_method.lower() == "eigen":
+        plt.ylabel("Eigenvalue Magnitude")
+        plt.xlabel("Eigenvalue Number")
     plt.xlabel('Identifiability Value ('+ options.lsa.decomp_method + ')')
     plt.legend()
     

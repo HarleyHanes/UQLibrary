@@ -49,7 +49,7 @@ class LsaOptions:
 class LsaResults:
     def __init__(self,jacobian=np.empty, rsi=np.empty, fisher=np.empty,
                  active_set="", inactive_set="", ident_values = np.empty,\
-                 ident_vectors=np.empty):
+                 ident_vectors=np.empty, reduction_order = []):
         self.jac=jacobian
         self.rsi=rsi
         self.fisher=fisher
@@ -57,6 +57,7 @@ class LsaResults:
         self.inactive_set=inactive_set
         self.ident_values = ident_values
         self.ident_vectors = ident_vectors
+        self.reduction_order =reduction_order
     pass
 
 
@@ -94,7 +95,7 @@ def run_lsa(model, lsa_options, logging = 0):
 
     #Active Subspace Analysis
     if lsa_options.run_param_subset:
-        active_set, inactive_set, ident_values, ident_vectors = \
+        active_set, inactive_set, ident_values, ident_vectors, reduction_order = \
             get_active_subset(model.eval_fcn, model.base_poi, model.base_qoi, \
                               model.name_poi, model. name_qoi, lsa_options.decomp_method,\
                               lsa_options.subset_rel_tol, lsa_options.x_delta, \
@@ -103,10 +104,12 @@ def run_lsa(model, lsa_options, logging = 0):
     if lsa_options.run_lsa and lsa_options.run_param_subset:
         return LsaResults(jacobian=jac_raw, rsi=jac_rsi, fisher=fisher_mat,\
                           active_set=active_set, inactive_set=inactive_set,\
-                          ident_values = ident_values, ident_vectors = ident_vectors)
+                          ident_values = ident_values, ident_vectors = ident_vectors, \
+                          reduction_order = reduction_order)
     elif lsa_options.run_param_subset and not lsa_options.run_lsa:
         return LsaResults(active_set=active_set, inactive_set=inactive_set,\
-                          ident_values = ident_values, ident_vectors = ident_vectors)
+                          ident_values = ident_values, ident_vectors = ident_vectors, \
+                          reduction_order = reduction_order)
     elif lsa_options.run_lsa and not lsa_options.run_param_subset:
         return LsaResults(jacobian=jac_raw, rsi=jac_rsi, fisher=fisher_mat)
     
@@ -244,6 +247,7 @@ def get_active_subset(eval_fcn, base_poi, base_qoi, name_poi, name_qoi,\
     #Inititalize lists that hold the values and vectors at each iteration
     ident_values_stored = []
     ident_vectors_stored = []
+    reduction_order = []
     while eliminate:
         #Perform Eigendecomp
         if decomp_method.lower() == "eigen":
@@ -252,9 +256,9 @@ def get_active_subset(eval_fcn, base_poi, base_qoi, name_poi, name_qoi,\
             ident_values, ident_vectors =np.linalg.eig(fisher_mat)
         elif decomp_method.lower() == "svd":
             u, ident_values, ident_vectors = np.linalg.svd(jac, full_matrices = False)
-            if logging >1 : 
-                print("Identifiability Values: " + str(ident_values))
-                print("Identifiability Vectors: "  + str(ident_vectors))
+            # if logging >1 : 
+            #     print("Identifiability Values: " + str(ident_values))
+            #     print("Identifiability Vectors: "  + str(ident_vectors))
             
         ident_values_stored.append(ident_values)
         ident_vectors_stored.append(ident_vectors)
@@ -268,7 +272,16 @@ def get_active_subset(eval_fcn, base_poi, base_qoi, name_poi, name_qoi,\
                 #This indexing may seem odd but its because we're keeping the full model parameter numbering while trying
                 # to index within the reduced model so we have to add to the index the previously removed params
             #Record inactive param in inactive space
+            if logging > 1 :
+                print("Unidentifiable Param Index: " + str(inactive_param))
+                print("Unidentifiable Param Reduced Index: " + str(inactive_param_reduced_index))
+                print("Corresponding Vector: " + str(ident_vectors[:, np.argmin(np.absolute(ident_values))]))
+                if np.all(ident_vectors[:, np.argmin(np.absolute(ident_values))] == ident_vectors[:,-1]):
+                    print("Unidentifiable vector is last vector")
+                else :
+                    print("Unidentifiable vector is NOT last vector")
             inactive_index[inactive_param]=1
+            reduction_order.append(name_poi[inactive_param])
             #Remove inactive elements of jacobian
             jac=np.delete(jac,inactive_param_reduced_index,1)
         else:
@@ -287,7 +300,7 @@ def get_active_subset(eval_fcn, base_poi, base_qoi, name_poi, name_qoi,\
     #     np.array([x for x, y in zip(reduced_poi,model.base_poi) if inactive_index== True]))
     # #reduced_model.eval_fcn=lambda reduced_poi: model.eval_fcn(np.where(inactive_index==False, reduced_poi, model.base_poi))
     # reduced_model.base_qoi=reduced_model.eval_fcn(reduced_model.base_poi)
-    return active_set, inactive_set, ident_values_stored, ident_vectors_stored
+    return active_set, inactive_set, ident_values_stored, ident_vectors_stored, reduction_order
 
 def model_reduction(model,inactive_param):
     """Computes a new Model object using only active parameter set"
