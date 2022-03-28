@@ -347,8 +347,6 @@ def print_results(results,model,options):
             print(results.lsa.active_set)
             print('\nInactive Supspace')
             print(results.lsa.inactive_set)
-            print('\nReduction Order')
-            print(results.lsa.reduction_order)
             if options.lsa.pss_algorithm.lower() == "smith":
                 print('\nIdentifiability Values')
                 for i_sim in range(len(results.lsa.ident_values)):

@@ -56,45 +56,124 @@ def test_linear_jac_complex():
 #==============================================================================
 
 # Heated Rod
-def test_heat_ident_subset_finite():
-    (model, options) = uq.examples.GetExample("aluminum rod (uniform)")
-    #Run only lsa with finite approx
-    options.gsa.run = False
-    options.lsa.x_delta = 1e-8
-    options.lsa.method = "finite"
-    options.display = False
-    options.lsa.run_param_subset =True
     
-    results = uq.run_uq(model, options)
-    true_subset = np.array(["h"])
-    assert np.all(true_subset==results.lsa.active_set)
-    
-def test_heat_ident_subset_complex():
-    (model, options) = uq.examples.GetExample("aluminum rod (uniform)")
-    #Run only lsa with complex approx
-    options.gsa.run = False
-    options.lsa.x_delta = 1e-16
-    options.lsa.method = "complex"
-    options.display = False
-    options.lsa.run_param_subset =True
-    
-    results = uq.run_uq(model, options)
-    true_subset = np.array(["h"])
-    assert np.all(true_subset==results.lsa.active_set)
-    
-# Helmholtz
-# def test_helmholtz_ident_subset_complex():
-#     (model, options) = uq.examples.GetExample("helmholtz")
-#     #Run only lsa with finite approx
-#     options.gsa.run = False
-#     options.lsa.x_delta = 1e-16
-#     options.lsa.method = "complex"
-#     options.display = False
-#     options.lsa.run_param_subset =True
-    
-#     results = uq.run_uq(model, options)
-#     true_subset = np.array(["alpha1", "alpha11", "alpha111"])
-#     assert np.all(true_subset==results.lsa.active_set)
+# Helmholtz, RRQR Algorithm
+def test_helmholtz_rrqr_ident_subset_complex():
+     (model, options) = uq.examples.GetExample("helmholtz (identifiable)")
+     #Run only lsa with finite approx
+     options.gsa.run = False
+     options.lsa.run_lsa = False
+     options.lsa.run_param_subset =True
+     options.lsa.x_delta = 1e-16
+     options.lsa.deriv_method = "complex"
+     options.lsa.pss_algorithm = "RRQR"
+     options.lsa.pss_rel_tol = 1e-6
+     options.lsa.pss_decomp_method = "svd"
+     options.display = True
+     options.plot = False
+   
+     results = uq.run_uq(model, options)
+     true_subset = np.array(["alpha1", "alpha11", "alpha111"])
+     assert np.all(true_subset==results.lsa.active_set)
+     
+def test_helmholtz_rrqr_single_unident_subset_complex():
+     (model, options) = uq.examples.GetExample("helmholtz (unidentifiable)")
+     #Run only lsa with finite approx
+     options.gsa.run = False
+     options.lsa.run_lsa = False
+     options.lsa.run_param_subset =True
+     options.lsa.x_delta = 1e-16
+     options.lsa.deriv_method = "complex"
+     options.lsa.pss_algorithm = "RRQR"
+     options.lsa.pss_rel_tol = 1e-6
+     options.lsa.pss_decomp_method = "svd"
+     options.display = True
+     options.plot = False
+   
+     results = uq.run_uq(model, options)
+     true_subset = np.array(["alpha1", "alpha11"])
+     
+     assert np.all(true_subset==results.lsa.active_set)
+     
+def test_helmholtz_rrqr_double_unident_subset_complex():
+     (model, options) = uq.examples.GetExample("helmholtz (double unidentifiable)")
+     #Run only lsa with finite approx
+     options.gsa.run = False
+     options.lsa.run_lsa = False
+     options.lsa.run_param_subset =True
+     options.lsa.x_delta = 1e-16
+     options.lsa.deriv_method = "complex"
+     options.lsa.pss_algorithm = "RRQR"
+     options.lsa.pss_rel_tol = 1e-6
+     options.lsa.pss_decomp_method = "svd"
+     options.display = True
+     options.plot = False
+   
+     results = uq.run_uq(model, options)
+     true_ident = np.array(["alpha1", "alpha11"])
+     true_unident = np.array(["alpha111", "fake parameter"])
+     
+     assert np.all(true_ident==results.lsa.active_set) and \
+         np.all(true_unident==results.lsa.inactive_set)
+         
+ 
+def test_helmholtz_smith_ident_subset_complex():
+     (model, options) = uq.examples.GetExample("helmholtz (identifiable)")
+     #Run only lsa with finite approx
+     options.gsa.run = False
+     options.lsa.run_lsa = False
+     options.lsa.run_param_subset =True
+     options.lsa.x_delta = 1e-16
+     options.lsa.deriv_method = "complex"
+     options.lsa.pss_algorithm = "Smith"
+     options.lsa.pss_rel_tol = 1e-6
+     options.lsa.pss_decomp_method = "svd"
+     options.display = True
+     options.plot = False
+   
+     results = uq.run_uq(model, options)
+     true_subset = np.array(["alpha1", "alpha11", "alpha111"])
+     assert np.all(true_subset==results.lsa.active_set)
+     
+def test_helmholtz_smith_single_unident_subset_complex():
+     (model, options) = uq.examples.GetExample("helmholtz (unidentifiable)")
+     #Run only lsa with finite approx
+     options.gsa.run = False
+     options.lsa.run_lsa = False
+     options.lsa.run_param_subset =True
+     options.lsa.x_delta = 1e-16
+     options.lsa.deriv_method = "complex"
+     options.lsa.pss_algorithm = "Smith"
+     options.lsa.pss_rel_tol = 1e-6
+     options.lsa.pss_decomp_method = "svd"
+     options.display = True
+     options.plot = False
+   
+     results = uq.run_uq(model, options)
+     true_subset = np.array(["alpha1", "alpha11"])
+     
+     assert np.all(true_subset==results.lsa.active_set)
+     
+def test_helmholtz_smith_double_unident_subset_complex():
+     (model, options) = uq.examples.GetExample("helmholtz (double unidentifiable)")
+     #Run only lsa with finite approx
+     options.gsa.run = False
+     options.lsa.run_lsa = False
+     options.lsa.run_param_subset =True
+     options.lsa.x_delta = 1e-16
+     options.lsa.deriv_method = "complex"
+     options.lsa.pss_algorithm = "Smith"
+     options.lsa.pss_rel_tol = 1e-6
+     options.lsa.pss_decomp_method = "svd"
+     options.display = True
+     options.plot = False
+   
+     results = uq.run_uq(model, options)
+     true_ident = np.array(["alpha1", "alpha11"])
+     true_unident = np.array(["alpha111", "fake parameter"])
+     
+     assert np.all(true_ident==results.lsa.active_set) and \
+         np.all(true_unident==results.lsa.inactive_set)
 
 #==============================================================================
 #----------------------------Morris integrated tests---------------------------
@@ -108,6 +187,7 @@ def test_linear_portfolio():
     options.gsa.run_morris = True
     options.gsa.l_morris = 1/40
     options.gsa.n_samp_morris = 100
+    options.plot = False
     
     results = uq.run_uq(model, options)
     assert np.allclose(results.gsa.morris_mean_abs, np.array([2, 1]))

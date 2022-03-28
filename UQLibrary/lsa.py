@@ -75,7 +75,7 @@ class LsaOptions:
 class LsaResults:
     def __init__(self,jacobian=np.empty, rsi=np.empty, fisher=np.empty,
                  active_set="", inactive_set="", ident_values = np.empty,\
-                 ident_vectors=np.empty, reduction_order = []):
+                 ident_vectors=np.empty):
         self.jac=jacobian
         self.rsi=rsi
         self.fisher=fisher
@@ -83,7 +83,6 @@ class LsaResults:
         self.inactive_set=inactive_set
         self.ident_values = ident_values
         self.ident_vectors = ident_vectors
-        self.reduction_order =reduction_order
     pass
 
 
@@ -121,18 +120,16 @@ def run_lsa(model, lsa_options, logging = 0):
 
     #Active Subspace Analysis
     if lsa_options.run_param_subset:
-        active_set, inactive_set, ident_values, ident_vectors, reduction_order = \
+        active_set, inactive_set, ident_values, ident_vectors= \
             get_active_subset(model, lsa_options,logging = logging)
         #Collect Outputs and return as an lsa object
     if lsa_options.run_lsa and lsa_options.run_param_subset:
         return LsaResults(jacobian=jac_raw, rsi=jac_rsi, fisher=fisher_mat,\
                           active_set=active_set, inactive_set=inactive_set,\
-                          ident_values = ident_values, ident_vectors = ident_vectors, \
-                          reduction_order = reduction_order)
+                          ident_values = ident_values, ident_vectors = ident_vectors)
     elif lsa_options.run_param_subset and not lsa_options.run_lsa:
         return LsaResults(active_set=active_set, inactive_set=inactive_set,\
-                          ident_values = ident_values, ident_vectors = ident_vectors, \
-                          reduction_order = reduction_order)
+                          ident_values = ident_values, ident_vectors = ident_vectors)
     elif lsa_options.run_lsa and not lsa_options.run_param_subset:
         return LsaResults(jacobian=jac_raw, rsi=jac_rsi, fisher=fisher_mat)
     
@@ -261,7 +258,7 @@ def get_active_subset(model, lsa_options,logging=0):
     if lsa_options.pss_algorithm.lower()=="smith":
         if logging:
             print("Running Smith Textbook Subset Selection Algoirthm")
-        active_set, inactive_set, ident_values, ident_vectors, reduction_order = \
+        active_set, inactive_set, ident_values, ident_vectors= \
             pss_smith(model.eval_fcn, model.base_poi, model.base_qoi, \
                               model.name_poi, model. name_qoi, lsa_options.pss_decomp_method,\
                               lsa_options.pss_rel_tol, lsa_options.x_delta, \
@@ -274,10 +271,9 @@ def get_active_subset(model, lsa_options,logging=0):
                               model.name_poi, model. name_qoi, lsa_options.pss_decomp_method,\
                               lsa_options.pss_rel_tol, lsa_options.x_delta, \
                               lsa_options.deriv_method, logging = logging)
-        reduction_order = np.array(["null"])
     else :
         raise Exception("Unrecognized pss_algorith: " + str(lsa_options.pss_algorith))
-    return active_set, inactive_set, ident_values, ident_vectors, reduction_order
+    return active_set, inactive_set, ident_values, ident_vectors
         
 def pss_rrqr(eval_fcn, base_poi, base_qoi, name_poi, name_qoi,\
                       decomp_method, subset_rel_tol, x_delta, deriv_method,
