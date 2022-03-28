@@ -21,13 +21,13 @@ def main():
     #f
     # [model, options] = uqExamples.GetExample('aluminum rod (normal)')
     #
-    print("Loading Example: Ishigami function with Low Discrepency Normal Distribution")
+    example = 'Helmholtz (double unidentifiable)'
+    print("Loading Example:" + str(example) + " function.")
     # [model, options] = uq.examples.GetExample('ishigami (normal)')
     # options.lsa.run_param_subset = False
     # options.display = True
     # options.save = True
-    [model, options] = uq.examples.GetExample('helmholtz')
-    options.lsa.subset_rel_tol=.023
+    [model, options] = uq.examples.GetExample(example)
     options.lsa.run_lsa = False
     options.lsa.run_param_subset = True
     options.gsa.run = False
@@ -37,7 +37,7 @@ def main():
     #
     # # Run UQ package
     # (baseSobol,totalSobol)= uq.TestAccuracy(model, options, np.arange(start=10000, stop=200000, step=5000))
-    results = uq.run_uq(model, options, logging = 0)
+    results = uq.run_uq(model, options, logging = 3)
     #
     # plt.plot(results.gsa.sampD[:450,0], results.gsa.sampD[:450,1],'rs')
     # plt.plot(results.gsa.sampD[options.gsa.nSamp:options.gsa.nSamp+450,0], results.gsa.sampD[options.gsa.nSamp:options.gsa.nSamp+450,1],'bo')

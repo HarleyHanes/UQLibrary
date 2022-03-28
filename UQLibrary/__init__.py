@@ -340,17 +340,21 @@ def print_results(results,model,options):
             #print("Fisher Matrix: " + str(results.lsa.fisher))
         #Active Subsapce Analysis
         if options.lsa.run_param_subset:
-            print('\nParameter Subset selection using ' + options.lsa.decomp_method +\
-                  ' decomposition and tolerance ' + str(options.lsa.subset_rel_tol))
+            print('\nParameter Subset selection using ' + options.lsa.pss_decomp_method +\
+                  ' decomposition, ' + str(options.lsa.pss_algorithm) + ' algorithm' + \
+                  ' and tolerance ' + str(options.lsa.pss_rel_tol))
             print('Active Supspace')
             print(results.lsa.active_set)
             print('\nInactive Supspace')
             print(results.lsa.inactive_set)
             print('\nReduction Order')
             print(results.lsa.reduction_order)
-            print('\nIdentifiability Values')
-            for i_sim in range(len(results.lsa.ident_values)):
-                print('Pass ' + str(i_sim+1) + ': ' + str(results.lsa.ident_values[i_sim]))
+            if options.lsa.pss_algorithm.lower() == "smith":
+                print('\nIdentifiability Values')
+                for i_sim in range(len(results.lsa.ident_values)):
+                    print('Pass ' + str(i_sim+1) + ': ' + str(results.lsa.ident_values[i_sim]))
+            elif options.lsa.pss_algorithm.lower() == "rrqr":
+                print('\nIdentifiability Values: ' + str(results.lsa.ident_values))
     if options.gsa.run: 
         if options.gsa.run_sobol:
             if model.n_qoi==1:
@@ -399,13 +403,13 @@ def plot_lsa(model, ident_values, options):
     for i_sim in range(len(ident_values)):
         plt.semilogy(ident_values[i_sim], label = 'Iteration %i' % i_sim)
     fig.tight_layout()
-    if options.lsa.decomp_method.lower() == "svd":
+    if options.lsa.pss_decomp_method.lower() == "svd":
         plt.ylabel("Singular Value Magnitude")
         plt.xlabel("Singular Value Number")
-    elif options.lsa.decomp_method.lower() == "eigen":
+    elif options.lsa.pss_decomp_method.lower() == "eigen":
         plt.ylabel("Eigenvalue Magnitude")
         plt.xlabel("Eigenvalue Number")
-    plt.xlabel('Identifiability Value ('+ options.lsa.decomp_method + ')')
+    plt.xlabel('Identifiability Value ('+ options.lsa.pss_decomp_method + ')')
     plt.legend()
     
     plt.savefig(options.path+"identifiability_values.png")
