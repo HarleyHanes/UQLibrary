@@ -14,19 +14,24 @@ import warnings
 #from tabulate import tabulate                       #Used for printing tables to terminal
 #import sobol                                        #Used for generating sobol sequences
 #import SALib.sample as sample
-#import scipy.stats as sct
+import scipy.stats as sct
+from .sampling import parallel_eval
+import mpi4py.MPI as MPI
+import matplotlib.pyplot as plt
 
 class LsaOptions:
-    def __init__(self,run=True, run_lsa = True, run_param_subset=True, x_delta=10**(-12),\
+    __slots__=["run", "run_lsa", "run_pss", "x_delta", "deriv_method", "scale",\
+               "pss_algorithm", "pss_rel_tol", "pss_decomp_method"]
+    def __init__(self,run=True, run_lsa = True, run_pss=True, x_delta=10**(-12),\
                  deriv_method='complex', scale='y', pss_algorithm = "rrqr",\
                  pss_rel_tol=1e-8, pss_decomp_method = "svd"):
         #----------------------------Run Selections----------------------------
         self.run=run                              #Whether to run lsa (True or False)
         if self.run == False:
-            self.run_param_subset = False
+            self.run_pss = False
             self.run_lsa= False
         else:
-            self.run_param_subset=run_param_subset
+            self.run_pss=run_pss
             self.run_lsa = run_lsa
         #-------------------------Derivative Calculations----------------------
         self.x_delta=x_delta                      #Input perturbation for calculating jacobian
@@ -119,18 +124,18 @@ def run_lsa(model, lsa_options, logging = 0):
         fisher_mat=np.dot(np.transpose(jac_raw), jac_raw)
 
     #Active Subspace Analysis
-    if lsa_options.run_param_subset:
+    if lsa_options.run_pss:
         active_set, inactive_set, ident_values, ident_vectors= \
             get_active_subset(model, lsa_options,logging = logging)
         #Collect Outputs and return as an lsa object
-    if lsa_options.run_lsa and lsa_options.run_param_subset:
+    if lsa_options.run_lsa and lsa_options.run_pss:
         return LsaResults(jacobian=jac_raw, rsi=jac_rsi, fisher=fisher_mat,\
                           active_set=active_set, inactive_set=inactive_set,\
                           ident_values = ident_values, ident_vectors = ident_vectors)
-    elif lsa_options.run_param_subset and not lsa_options.run_lsa:
+    elif lsa_options.run_pss and not lsa_options.run_lsa:
         return LsaResults(active_set=active_set, inactive_set=inactive_set,\
                           ident_values = ident_values, ident_vectors = ident_vectors)
-    elif lsa_options.run_lsa and not lsa_options.run_param_subset:
+    elif lsa_options.run_lsa and not lsa_options.run_pss:
         return LsaResults(jacobian=jac_raw, rsi=jac_rsi, fisher=fisher_mat)
     
 ###----------------------------------------------------------------------------------------------
@@ -461,6 +466,60 @@ def pss_smith(eval_fcn, base_poi, base_qoi, name_poi, name_qoi,\
     # #reduced_model.eval_fcn=lambda reduced_poi: model.eval_fcn(np.where(inactive_index==False, reduced_poi, model.base_poi))
     # reduced_model.base_qoi=reduced_model.eval_fcn(reduced_model.base_poi)
     return active_set, inactive_set, ident_values_stored, ident_vectors_stored
+
+def test_model_reduction(model, inactive_pois, n_samp, save_location,pss_tol, \
+                         logging = 0):
+    mpi_comm = MPI.COMM_WORLD
+    mpi_rank = mpi_comm.Get_rank()
+    mpi_size = mpi_comm.Get_size()
+    # Get inactive indices
+    inactive_indices = np.where(np.isin(model.name_poi, inactive_pois))
+    if logging:
+        print("Inactive Indices:" + str(inactive_indices))
+        print("Inactive POIs:" + str(model.name_poi[inactive_indices]))
+    # Generate Parameter Sample
+    param_samp_full = model.sample_fcn(n_samp)
+    param_samp_reduced = param_samp_full
+    # Fix Inactive Parameters
+    param_samp_reduced[:,inactive_indices] = model.base_poi[inactive_indices]
+
+    # Compute model evaluations
+    if mpi_size == 0: 
+        qoi_samp_full = model.eval_fcn(param_samp_full)
+        qoi_samp_reduced = model.eval_fcn(param_samp_reduced)
+    else : 
+        qoi_samp_full = parallel_eval(model.eval_fcn, param_samp_full, logging = logging)
+        qoi_samp_reduced = parallel_eval(model.eval_fcn, param_samp_reduced, logging =logging)
+    mpi_comm.Barrier()
+    if mpi_rank==0:
+        for i_qoi in range(model.n_qoi):
+            
+            # Compute KDE approximations
+            kernel_full = sct.gaussian_kde(qoi_samp_full[:,i_qoi])
+            kernel_reduced = sct.gaussian_kde(qoi_samp_reduced[:,i_qoi])
+            
+            #Plot KDEs
+            plot_kde(kernel_full, kernel_reduced, \
+                     [np.min(qoi_samp_full[:,i_qoi]), np.max(qoi_samp_full[:,i_qoi])],\
+                     model.name_qoi[i_qoi], save_location, pss_tol)
+
+        
+def plot_kde(kernel_full, kernel_reduced, qoi_bounds, qoi_name, save_location, pss_tol):
+    #Generate qoi evaluation values
+    qoi_spacing = np.linspace(qoi_bounds[0], qoi_bounds[1],200)
+    #Evaluate kernels at qoi values
+    qois_full = kernel_full.pdf(qoi_spacing)
+    qois_reduced = kernel_reduced.pdf(qoi_spacing)
+    #Plot kernels
+    fig = plt.figure()
+    plt.plot(qoi_spacing, qois_full, label="Full Model")
+    plt.plot(qoi_spacing, qois_reduced, label="Reduced Model", linestyle='dashdot')
+    plt.xlabel(qoi_name)
+    plt.title("KDE of " + qoi_name +  "(PSS tolerance=" + str(pss_tol) + ")")
+    plt.legend()
+    fig.tight_layout()
+    plt.savefig(save_location + "kde_"+ qoi_name + "_tol_" + str(int(np.log(pss_tol))) + ".png")
+    
 
 
 def model_reduction(model,inactive_param):

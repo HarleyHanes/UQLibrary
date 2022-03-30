@@ -19,6 +19,7 @@ import mpi4py.MPI as MPI
 from . import lsa
 from . import gsa
 from . import examples
+from . import sampling
 #import seaborne as seaborne
 ###----------------------------------------------------------------------------------------------
 ###-------------------------------------Class Definitions----------------------------------------
@@ -33,6 +34,7 @@ from . import examples
 
 #--------------------------------------plotOptions------------------------------------------------
 class PlotOptions:
+    __slots__=["run", "n_points", "path"]
     def __init__(self,run=True,n_points=400,path=False):
         self.run=run
         self.n_points=n_points
@@ -41,6 +43,7 @@ class PlotOptions:
 #--------------------------------------uqOptions------------------------------------------------
 #   Class holding the above options subclasses
 class Options:
+    __slots__=["lsa", "plot", "gsa", "display", "save", "path"]
     def __init__(self,lsa=lsa.LsaOptions(),plot=PlotOptions(),gsa=gsa.GsaOptions(), \
                  display=True, save=False, path='..'):
         self.lsa=lsa
@@ -57,6 +60,8 @@ class Options:
 ##-------------------------------------model------------------------------------------------------
 #Define class "model", this will be the class used to collect input information for all functions
 class Model:
+    __slots__=["base_poi", "base_qoi", "name_poi", "name_qoi", "cov", "eval_fcn", "dist_type",\
+               "dist_param", "n_poi", "n_qoi", "sample_fcn"]
     #Model sets should be initialized with base parameter settings, covariance Matrix, and eval function that
     #   takes in a vector of POIs and outputs a vector of QOIs
     def __init__(self,base_poi=np.empty(0), name_poi = "auto", \
@@ -204,7 +209,7 @@ class Model:
             raise Exception("Incorrect data-type for dist_param, use ndarray, 'auto', or 'cov'")
             
         #Construct Distribution function
-        self.sample_fcn = gsa.get_samp_dist(self.dist_type, self.dist_param, self.n_poi)
+        self.sample_fcn = sampling.get_samp_dist(self.dist_type, self.dist_param, self.n_poi)
     
     pass
     def copy(self):
@@ -298,7 +303,7 @@ def run_uq(model, options, logging = False):
     if options.plot:
         if logging: 
             print("Plotting Results")
-        if options.lsa.run_param_subset and mpi_rank == 0:
+        if options.lsa.run_pss and mpi_rank == 0:
             plot_lsa(model, results.lsa.ident_values, options)
         if options.gsa.run_sobol and options.gsa.run  and mpi_rank == 0:
             plot_gsa(model, results.gsa.samp_d, results.gsa.f_d, options)
@@ -324,9 +329,9 @@ def print_results(results,model,options):
     #print('Sensitivity results for nSampSobol=' + str(options.gsa.n_samp_sobol))
     #Local Sensitivity Analysis
     if options.lsa.run:
+        print('Local Methods using ' + options.lsa.deriv_method \
+              +' approximation and h=' + str(options.lsa.x_delta))
         if options.lsa.run_lsa:
-            print('Local Sensitivity Analysis using ' + options.lsa.deriv_method \
-                  + ' approximation and h=' + str(options.lsa.x_delta))
             print('Base POI Values')
             print(tabulate([model.base_poi], headers=model.name_poi))
             print('\n Base QOI Values')
@@ -339,7 +344,7 @@ def print_results(results,model,options):
                   headers= np.append("",model.name_qoi)))
             #print("Fisher Matrix: " + str(results.lsa.fisher))
         #Active Subsapce Analysis
-        if options.lsa.run_param_subset:
+        if options.lsa.run_pss:
             print('\nParameter Subset selection using ' + options.lsa.pss_decomp_method +\
                   ' decomposition, ' + str(options.lsa.pss_algorithm) + ' algorithm' + \
                   ' and tolerance ' + str(options.lsa.pss_rel_tol))
@@ -481,4 +486,5 @@ def plot_gsa(model, sample_mat, eval_mat, options):
     #Display all figures
     if options.display:
         plt.show()
+        
 
