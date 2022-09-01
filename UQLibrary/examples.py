@@ -31,7 +31,7 @@ def GetExample(example, **kwargs):
         model = uq.Model(eval_fcn=lambda params: quadratic_function(baseEvalPoints, params),
                          base_poi=np.array([1, 1, 1]),
                          cov=np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
-        options.gsa.nSampSobol=100               # Keep normal sampling but reduce sample size to 100
+        options.gsa.n_samp_sobol=100               # Keep normal sampling but reduce sample size to 100
     
     elif example.lower() == 'helmholtz (identifiable)':
         baseEvalPoints = np.linspace(0,1,100)
@@ -43,7 +43,7 @@ def GetExample(example, **kwargs):
                          name_poi = np.array(["alpha1", "alpha11", "alpha111"]),
                          dist_type='uniform')  # Use uniform sampling of +-20% nominal value
         model.dist_param = np.array([[.8, .8, .8], [1.2, 1.2, 1.2]]) * model.base_poi
-        options.gsa.nSampSobol=10000              # Keep normal sampling but reduce sample size to 100
+        options.gsa.n_samp_sobol=10000              # Keep normal sampling but reduce sample size to 100
     
     elif example.lower() == 'helmholtz (unidentifiable)':
         baseEvalPoints = np.linspace(0,.05,100)
@@ -55,7 +55,7 @@ def GetExample(example, **kwargs):
                          name_poi = np.array(["alpha1", "alpha11", "alpha111"]),
                          dist_type='uniform')  # Use uniform sampling of +-20% nominal value
         model.dist_param = np.array([[.8, .8, .8], [1.2, 1.2, 1.2]]) * model.base_poi
-        options.gsa.nSampSobol=10000              # Keep normal sampling but reduce sample size to 100
+        options.gsa.n_samp_sobol=10000              # Keep normal sampling but reduce sample size to 100
         options.lsa.pss_rel_tol = 1e-6
     
     elif example.lower() == 'helmholtz (double unidentifiable)':
@@ -69,7 +69,7 @@ def GetExample(example, **kwargs):
                          name_poi = np.array(["alpha1", "alpha11", "alpha111", "fake parameter"]),
                          dist_type='uniform')  # Use uniform sampling of +-20% nominal value
         model.dist_param = np.array([[.8, .8, .8, .8], [1.2, 1.2, 1.2, 1.2]]) * model.base_poi
-        options.gsa.nSampSobol=10000              # Keep normal sampling but reduce sample size to 100
+        options.gsa.n_samp_sobol=10000              # Keep normal sampling but reduce sample size to 100
         options.lsa.pss_rel_tol = 1e-6
         
     elif example.lower() == 'integrated helmholtz':
@@ -98,7 +98,7 @@ def GetExample(example, **kwargs):
                          dist_param=np.array([[-math.pi, -math.pi, -math.pi], [math.pi, math.pi, math.pi]]))
         options.lsa.deriv_method = 'finite' 
         options.lsa.xDelta = 10**(-6)
-        options.gsa.nSampSobol = 500000          # Use default number of samples
+        options.gsa.n_samp_sobol = 500000          # Use default number of samples
         
     elif example.lower() == 'ishigami (normal)':
         model = uq.Model(eval_fcn=Ishigami,
@@ -107,7 +107,7 @@ def GetExample(example, **kwargs):
                          dist_param=np.array([[0, 0, 0], [(2*math.pi)**2/12, (2*math.pi)**2/12, (2*math.pi)**2/12]]))
         options.lsa.deriv_method = 'finite' 
         options.lsa.xDelta = 10**(-6)
-        options.gsa.nSampSobol= 500000 
+        options.gsa.n_samp_sobol= 500000 
         
     elif example.lower() == 'trial function':
         model = uq.Model(eval_fcn=TrialFunction,
@@ -122,7 +122,7 @@ def GetExample(example, **kwargs):
                        base_poi=np.array([0, 0]),
                        dist_type="normal",
                        dist_param=np.array([[0, 0], [1, 9]]))
-        options.gsa.nSampSobol = 100000
+        options.gsa.n_samp_sobol = 100000
         
     elif example.lower() == 'portfolio (uniform)':
         model=uq.Model(eval_fcn=lambda params: Portfolio(params, np.array([2, 1])),
@@ -130,7 +130,7 @@ def GetExample(example, **kwargs):
                        dist_type="uniform",
                        dist_param=np.array([[-np.sqrt(12)/2, -3*np.sqrt(3)], [np.sqrt(12)/2, 3*np.sqrt(3)]]))
         options.path = '..\\Figures\\Portfolio(Uniform)'
-        options.gsa.nSampSobol = 2**12
+        options.gsa.n_samp_sobol = 2**12
     #--------------------------------Heated Rod Models------------------------------------------------------------
     elif example.lower() == 'aluminum rod (uniform)':
         model = uq.Model(eval_fcn=lambda params: HeatRod(params, np.array([55])),
@@ -141,7 +141,7 @@ def GetExample(example, **kwargs):
                          name_poi=np.array(['Phi', 'h']),
                          name_qoi=np.array(['T(x=55)']))
         options.path = '..\\Figures\\AluminumRod(Uniform, x=55)'
-        options.gsa.nSampSobol = 500000
+        options.gsa.n_samp_sobol = 500000
         
     elif example.lower() == 'aluminum rod (normal)':
         model = uq.Model(eval_fcn=lambda params: HeatRod(params, np.array([15, 25, 35, 45, 55])),
@@ -153,7 +153,7 @@ def GetExample(example, **kwargs):
                          #name_qoi=np.array(['T(x=15)','T(x=55)'])
                          )
         options.path = '..\\Figures\\AluminumRod(Normal)'
-        options.gsa.nSampSobol = 100000000
+        options.gsa.n_samp_sobol = 100000000
         
     elif example.lower() == 'aluminum rod (saltelli normal)':
         model = uq.Model(eval_fcn=lambda params: HeatRod(params, np.array([55])),
@@ -163,7 +163,7 @@ def GetExample(example, **kwargs):
                          name_poi=np.array(['Phi', 'h']),
                          name_qoi=np.array(['T(x=55)']))
         options.path = '..\\Figures\\AluminumRod(saltelli_normal, x=55)'
-        options.gsa.nSampSobol = 200000
+        options.gsa.n_samp_sobol = 200000
     #------------------------------------SIR Models----------------------------------------------------------------
         
     elif example.lower() == 'sir infected':

@@ -18,6 +18,7 @@ import scipy.stats as sct
 from .sampling import parallel_eval
 import mpi4py.MPI as MPI
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 
 class LsaOptions:
     __slots__=["run", "run_lsa", "run_pss", "x_delta", "deriv_method", "scale",\
@@ -418,10 +419,11 @@ def pss_smith(eval_fcn, base_poi, base_qoi, name_poi, name_qoi,\
     #Calculate Jacobian
     jac=get_jacobian(eval_fcn, base_poi, x_delta,\
                          deriv_method, scale=False, y_base=base_qoi)
-    first_pass = True
     #Inititalize lists that hold the values and vectors at each iteration
     ident_values_stored = []
     ident_vectors_stored = []
+    reduction_order = []
+    unidentifiable_poi = 0
     while eliminate:
         #Perform Eigendecomp
         if decomp_method.lower() == "eigen":
@@ -429,43 +431,51 @@ def pss_smith(eval_fcn, base_poi, base_qoi, name_poi, name_qoi,\
             fisher_mat=np.dot(np.transpose(jac), jac)
             ident_values, ident_vectors =np.linalg.eig(fisher_mat)
         elif decomp_method.lower() == "svd":
-            u, ident_values, ident_vectors = np.linalg.svd(jac)
-            if logging >1 : 
-                print("Identifiability Values: " + str(ident_values))
-                print("Identifiability Vectors: "  + str(ident_vectors))
+            u, ident_values, ident_vectors = np.linalg.svd(jac, full_matrices = False)
+            # if logging >1 : 
+            #     print("Identifiability Values: " + str(ident_values))
+            #     print("Identifiability Vectors: "  + str(ident_vectors))
             
         ident_values_stored.append(ident_values)
         ident_vectors_stored.append(ident_vectors)
             
         
         #Eliminate dimension/ terminate
-        if np.min(ident_values) < subset_rel_tol * np.max(ident_values):
+        if ident_values[-unidentifiable_poi-1] < subset_rel_tol * np.max(ident_values):
+            unidentifiable_poi+=1
             #Get inactive parameter
-            inactive_param_reduced_index=np.argmax(np.absolute(ident_vectors[:, np.argmin(np.absolute(ident_values))]))
-            inactive_param=inactive_param_reduced_index+np.sum(inactive_index[0:(inactive_param_reduced_index+1)]).astype(int)
+            inactive_param = np.argmax(np.absolute(ident_vectors[:, -unidentifiable_poi]))
                 #This indexing may seem odd but its because we're keeping the full model parameter numbering while trying
                 # to index within the reduced model so we have to add to the index the previously removed params
             #Record inactive param in inactive space
+            if logging > 1 :
+                print("Unidentifiable Param Index: " + str(inactive_param))
+                print("Corresponding Vector: " + str(ident_vectors[:, -unidentifiable_poi]))
+                # if np.all(ident_vectors[:, np.argmin(np.absolute(ident_values))] == ident_vectors[:,-1]):
+                #     print("Unidentifiable vector is last vector")
+                # else :
+                #     print("Unidentifiable vector is NOT last vector")
             inactive_index[inactive_param]=1
-            #Remove inactive elements of jacobian
-            jac=np.delete(jac,inactive_param_reduced_index,1)
+            reduction_order.append(name_poi[inactive_param])
+            #Zero out inactive elements of jacobian
+            jac[:,inactive_param] = 0
         else:
             #Terminate Active Subspace if singular values within tolerance
             eliminate=False
-        first_pass = False
             
     #Define active and inactive spaces
     active_set=name_poi[inactive_index == False]
     inactive_set=name_poi[inactive_index == True]
-    
-    # reduced_model = model_reduction(model, inactive_param)
-    # reduced_model.base_poi=reduced_model.base_poi[inactive_index == False]
-    # reduced_model.name_poi=reduced_model.name_poi[inactive_index == False]
-    # reduced_model.eval_fcn = lambda reduced_poi: model.eval_fcn(
-    #     np.array([x for x, y in zip(reduced_poi,model.base_poi) if inactive_index== True]))
-    # #reduced_model.eval_fcn=lambda reduced_poi: model.eval_fcn(np.where(inactive_index==False, reduced_poi, model.base_poi))
-    # reduced_model.base_qoi=reduced_model.eval_fcn(reduced_model.base_poi)
+
+# reduced_model = model_reduction(model, inactive_param)
+# reduced_model.base_poi=reduced_model.base_poi[inactive_index == False]
+# reduced_model.name_poi=reduced_model.name_poi[inactive_index == False]
+# reduced_model.eval_fcn = lambda reduced_poi: model.eval_fcn(
+#     np.array([x for x, y in zip(reduced_poi,model.base_poi) if inactive_index== True]))
+# #reduced_model.eval_fcn=lambda reduced_poi: model.eval_fcn(np.where(inactive_index==False, reduced_poi, model.base_poi))
+# reduced_model.base_qoi=reduced_model.eval_fcn(reduced_model.base_poi)
     return active_set, inactive_set, ident_values_stored, ident_vectors_stored
+
 
 def test_model_reduction(model, inactive_pois, n_samp, save_location,pss_tol, \
                          logging = 0):
@@ -478,20 +488,29 @@ def test_model_reduction(model, inactive_pois, n_samp, save_location,pss_tol, \
         print("Inactive Indices:" + str(inactive_indices))
         print("Inactive POIs:" + str(model.name_poi[inactive_indices]))
     # Generate Parameter Sample
-    param_samp_full = model.sample_fcn(n_samp)
-    param_samp_reduced = param_samp_full
+    poi_samp_full = model.sample_fcn(n_samp)
+    poi_samp_reduced = np.copy(poi_samp_full)
     # Fix Inactive Parameters
-    param_samp_reduced[:,inactive_indices] = model.base_poi[inactive_indices]
+    poi_samp_reduced[:,inactive_indices] = model.base_poi[inactive_indices]
 
+    print("poi_samp_full:" +str(poi_samp_full))
+    print("poi_samp_reduced:" +str(poi_samp_reduced))
     # Compute model evaluations
     if mpi_size == 0: 
-        qoi_samp_full = model.eval_fcn(param_samp_full)
-        qoi_samp_reduced = model.eval_fcn(param_samp_reduced)
+        qoi_samp_full = model.eval_fcn(poi_samp_full)
+        qoi_samp_reduced = model.eval_fcn(poi_samp_reduced)
     else : 
-        qoi_samp_full = parallel_eval(model.eval_fcn, param_samp_full, logging = logging)
-        qoi_samp_reduced = parallel_eval(model.eval_fcn, param_samp_reduced, logging =logging)
+        qoi_samp_full = parallel_eval(model.eval_fcn, poi_samp_full, logging = logging)
+        qoi_samp_reduced = parallel_eval(model.eval_fcn, poi_samp_reduced, logging =logging)
     mpi_comm.Barrier()
+    
+    print("qoi_samp_full:" +str(qoi_samp_full))
+    print("qoi_samp_reduced:" +str(qoi_samp_reduced))
     if mpi_rank==0:
+        #Save results
+        np.savez(save_location + "data.npz",\
+                 qoi_samp_full = qoi_samp_full, qoi_samp_reduced = qoi_samp_reduced,\
+                 poi_samp_reduced = poi_samp_reduced, poi_samp_full = poi_samp_full)
         for i_qoi in range(model.n_qoi):
             
             # Compute KDE approximations
@@ -501,10 +520,35 @@ def test_model_reduction(model, inactive_pois, n_samp, save_location,pss_tol, \
             #Plot KDEs
             plot_kde(kernel_full, kernel_reduced, \
                      [np.min(qoi_samp_full[:,i_qoi]), np.max(qoi_samp_full[:,i_qoi])],\
-                     model.name_qoi[i_qoi], save_location, pss_tol)
+                     model.name_qoi[i_qoi], 
+                     save_location + "kde_"+ model.name_qoi[i_qoi] + ".png",\
+                     pss_tol)
+                
+def test_model_reduction_precomputed(name_qoi, qoi_samp_full, qoi_samp_reduced, n_samp, save_location,pss_tol, \
+                         logging = 0, fontsize = 14, linewidth = 2.5):
+    mpi_comm = MPI.COMM_WORLD
+    mpi_rank = mpi_comm.Get_rank()
+    mpi_size = mpi_comm.Get_size()
+    if mpi_rank==0:
+        for i_qoi in range(name_qoi.size):
+            
+            # Compute KDE approximations
+            kernel_full = sct.gaussian_kde(qoi_samp_full[:,i_qoi])
+            kernel_reduced = sct.gaussian_kde(qoi_samp_reduced[:,i_qoi])
+            
+            #Plot KDEs
+            plot_kde(kernel_full, kernel_reduced, \
+                     [np.min(qoi_samp_full[:,i_qoi]), np.max(qoi_samp_full[:,i_qoi])],\
+                     name_qoi[i_qoi], 
+                     save_location + "kde_"+  name_qoi[i_qoi] + ".png",\
+                     pss_tol,
+                     fontsize = fontsize,
+                     linewidth = linewidth)
+
 
         
-def plot_kde(kernel_full, kernel_reduced, qoi_bounds, qoi_name, save_location, pss_tol):
+def plot_kde(kernel_full, kernel_reduced, qoi_bounds, qoi_name, save_location, pss_tol,
+             fontsize = 14, linewidth = 2.5):
     #Generate qoi evaluation values
     qoi_spacing = np.linspace(qoi_bounds[0], qoi_bounds[1],200)
     #Evaluate kernels at qoi values
@@ -512,13 +556,16 @@ def plot_kde(kernel_full, kernel_reduced, qoi_bounds, qoi_name, save_location, p
     qois_reduced = kernel_reduced.pdf(qoi_spacing)
     #Plot kernels
     fig = plt.figure()
-    plt.plot(qoi_spacing, qois_full, label="Full Model")
-    plt.plot(qoi_spacing, qois_reduced, label="Reduced Model", linestyle='dashdot')
+    plt.rc('font', size= fontsize) 
+    plt.plot(qoi_spacing, qois_full, linewidth = linewidth ,label="Full Model")
+    plt.plot(qoi_spacing, qois_reduced, linewidth = linewidth, label="Reduced Model", linestyle='dashdot')
     plt.xlabel(qoi_name)
-    plt.title("KDE of " + qoi_name +  "(PSS tolerance=" + str(pss_tol) + ")")
+    plt.title("KDE of " + qoi_name +  " (PSS tolerance=" + str(pss_tol) + ")")
+    plt.gca().xaxis.set_major_locator(MaxNLocator(nbins = 4))
+    plt.gca().yaxis.set_major_locator(MaxNLocator(nbins = 4))
     plt.legend()
-    fig.tight_layout()
-    plt.savefig(save_location + "kde_"+ qoi_name + "_tol_" + str(int(np.log(pss_tol))) + ".png")
+    #fig.tight_layout()
+    plt.savefig(save_location)
     
 
 

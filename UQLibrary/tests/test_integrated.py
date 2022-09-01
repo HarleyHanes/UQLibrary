@@ -22,9 +22,9 @@ def test_linear_jac_finite():
     (model, options) = uq.examples.GetExample("linear")
     #Run only jacobian approximation with finite approx
     options.gsa.run = False
-    options.lsa.run_param_subset = False
+    options.lsa.run_pss = False
     options.lsa.x_delta = 1e-3
-    options.lsa.method = "finite"
+    options.lsa.deriv_method = "finite"
     options.display = False
     
     model.base_poi = np.array([.5, .5])  #np.random.uniform(size=2)
@@ -39,9 +39,9 @@ def test_linear_jac_complex():
     (model, options) = uq.examples.GetExample("linear")
     #Run only jacobian approximation with finite approx
     options.gsa.run = False
-    options.lsa.run_param_subset = False
+    options.lsa.run_pss = False
     options.lsa.x_delta = 1e-16
-    options.lsa.method = "complex"
+    options.lsa.deriv_method = "complex"
     options.display = False
     
     model.base_poi = np.random.uniform(size=2)
@@ -63,7 +63,7 @@ def test_helmholtz_rrqr_ident_subset_complex():
      #Run only lsa with finite approx
      options.gsa.run = False
      options.lsa.run_lsa = False
-     options.lsa.run_param_subset =True
+     options.lsa.run_pss =True
      options.lsa.x_delta = 1e-16
      options.lsa.deriv_method = "complex"
      options.lsa.pss_algorithm = "RRQR"
@@ -81,7 +81,7 @@ def test_helmholtz_rrqr_single_unident_subset_complex():
      #Run only lsa with finite approx
      options.gsa.run = False
      options.lsa.run_lsa = False
-     options.lsa.run_param_subset =True
+     options.lsa.run_pss =True
      options.lsa.x_delta = 1e-16
      options.lsa.deriv_method = "complex"
      options.lsa.pss_algorithm = "RRQR"
@@ -100,7 +100,7 @@ def test_helmholtz_rrqr_double_unident_subset_complex():
      #Run only lsa with finite approx
      options.gsa.run = False
      options.lsa.run_lsa = False
-     options.lsa.run_param_subset =True
+     options.lsa.run_pss =True
      options.lsa.x_delta = 1e-16
      options.lsa.deriv_method = "complex"
      options.lsa.pss_algorithm = "RRQR"
@@ -122,7 +122,7 @@ def test_helmholtz_smith_ident_subset_complex():
      #Run only lsa with finite approx
      options.gsa.run = False
      options.lsa.run_lsa = False
-     options.lsa.run_param_subset =True
+     options.lsa.run_pss =True
      options.lsa.x_delta = 1e-16
      options.lsa.deriv_method = "complex"
      options.lsa.pss_algorithm = "Smith"
@@ -140,7 +140,7 @@ def test_helmholtz_smith_single_unident_subset_complex():
      #Run only lsa with finite approx
      options.gsa.run = False
      options.lsa.run_lsa = False
-     options.lsa.run_param_subset =True
+     options.lsa.run_pss =True
      options.lsa.x_delta = 1e-16
      options.lsa.deriv_method = "complex"
      options.lsa.pss_algorithm = "Smith"
@@ -159,7 +159,7 @@ def test_helmholtz_smith_double_unident_subset_complex():
      #Run only lsa with finite approx
      options.gsa.run = False
      options.lsa.run_lsa = False
-     options.lsa.run_param_subset =True
+     options.lsa.run_pss =True
      options.lsa.x_delta = 1e-16
      options.lsa.deriv_method = "complex"
      options.lsa.pss_algorithm = "Smith"

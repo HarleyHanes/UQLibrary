@@ -27,7 +27,12 @@ class GsaOptions:
             self.run_morris=run_morris                          #Whether to run Morris (True or False)
         self.n_samp_sobol = n_samp_sobol                      #Number of samples to be generated for GSA
         self.n_samp_morris = n_samp_morris
-        self.l_morris=l_morris
+        if callable(l_morris):
+            self.l_morris = l_morris
+        elif type(l_morris) == int or type(l_morris) == float:
+            self.l_morris = l_morris
+        else:
+            warnings.warn("Unrecongized l_morris type: " + str(type(l_morris)))
         pass
 
 class GsaResults:
@@ -345,8 +350,15 @@ def calculate_morris(eval_fcn, morris_samp, pert_distance, logging = False):
         for i_samp in range(n_samp):
             for i_pert in range(n_poi): 
                 i_poi = poi_pert_location[i_samp, i_pert]
+                pert = np.sum((morris_samp_seperated[i_samp, i_pert+1] -\
+                                       morris_samp_seperated[i_samp, i_pert]))
+                #Check exactly one parameter is changed
+                if 1 != np.nonzero(morris_samp_seperated[i_samp, i_pert+1] -\
+                                       morris_samp_seperated[i_samp, i_pert])[0].size:
+                    raise Exception("More than one POI changed in morris stepping.")
                 deriv_approx[i_samp,i_poi] = (f_eval_seperated[i_samp,i_pert+1] - \
-                                              f_eval_seperated[i_samp,i_pert])/ pert_distance
+                                              f_eval_seperated[i_samp,i_pert])/ \
+                                              pert
         # for i_poi in range(n_poi):
         #     deriv_approx[:,i_poi] = f_eval_seperated[:,i_poi+1] - f_eval_seperated[:,i_poi]
         if logging > 1:
@@ -404,27 +416,34 @@ def get_morris_poi_sample(param_dist, n_samp, n_poi, pert_distance, random = Fal
     B = (np.tril(np.ones(J.shape), -1))
     morris_samp_compact = np.empty((n_samp*(n_poi+1), n_poi))
     for i_samp in range(n_samp):
-        jTheta=random_samp[i_samp,]*J
-        #Calculate Morris Sample matrix
-        #Source: Smith, R. 2011. Uncertainty Quantification. p.334
-        if random == True:  
-            #Define Random Sampling matrices
-            #D=np.diag(np.random.choice(np.array([1,-1]), size=(n_poi,)))
-            #NOTE: using non-random step direction to keep denominator in deriv approx
-            #   equal to delta rather than -delta for some samples. Random form is
-            #   kept above in comments 
-            D=np.diag(np.random.choice(np.array([1,1]), size=(n_poi,)))
-            P=np.identity(n_poi)
-            np.random.shuffle(P)
-            samp_mat = np.matmul(jTheta+pert_distance/2*(np.matmul((2*B-J),D)+J),P)
-        elif random == False:
-            #Define non-random Sampling matrices
-            D=np.diag(np.random.choice(np.array([1,1]), size=(n_poi,)))
-            P=np.identity(n_poi)
-            np.random.shuffle(P)
-            # Only use non-random formulations for testing matrix generation
-            samp_mat = jTheta+pert_distance/2*(np.matmul((2*B-J),D)+J)
-        #Stack each grid seach so that a single eval_fcn call is required
+        if callable(pert_distance):
+            samp_mat = np.empty(n_poi+1, n_poi)
+            samp_mat[0,:] = random_samp[i_samp, :]
+            for i_poi in range(n_poi):
+                samp_mat[i_poi+1,:] = samp_mat[i_poi,:]
+                samp_mat[i_poi+1,i_poi] = pert_distance(samp_mat[i_poi,:], i_poi)
+        else: 
+            jTheta=random_samp[i_samp,]*J
+            #Calculate Morris Sample matrix
+            #Source: Smith, R. 2011. Uncertainty Quantification. p.334
+            if random == True:  
+                #Define Random Sampling matrices
+                #D=np.diag(np.random.choice(np.array([1,-1]), size=(n_poi,)))
+                #NOTE: using non-random step direction to keep denominator in deriv approx
+                #   equal to delta rather than -delta for some samples. Random form is
+                #   kept above in comments 
+                D=np.diag(np.random.choice(np.array([1,1]), size=(n_poi,)))
+                P=np.identity(n_poi)
+                np.random.shuffle(P)
+                samp_mat = np.matmul(jTheta+pert_distance/2*(np.matmul((2*B-J),D)+J),P)
+            elif random == False:
+                #Define non-random Sampling matrices
+                D=np.diag(np.random.choice(np.array([1,1]), size=(n_poi,)))
+                P=np.identity(n_poi)
+                np.random.shuffle(P)
+                # Only use non-random formulations for testing matrix generation
+                samp_mat = jTheta+pert_distance/2*(np.matmul((2*B-J),D)+J)
+            #Stack each grid seach so that a single eval_fcn call is required
         morris_samp_compact[i_samp*(n_poi+1):(i_samp+1)*(n_poi+1),:] = samp_mat
     return morris_samp_compact
 
