@@ -6,11 +6,8 @@ Created on Mon Feb  7 10:44:53 2022
 """
 
 import numpy as np
-import sys
 
-#Load Load functions to be tested
-sys.path.insert(0, '../')
-from lsa import get_jacobian
+from UQLibrary.lsa import get_jacobian
     
 #----------------------------------Support Functions---------------------------
     

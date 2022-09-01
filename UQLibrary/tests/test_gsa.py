@@ -8,16 +8,15 @@ Created on Wed Feb  9 10:45:11 2022
 
 
 import numpy as np
-import sys
 import random
 
-#Load Load functions to be tested
-sys.path.insert(0, '../')
-from gsa import get_morris_poi_sample
-from gsa import saltelli_sample
-from gsa import get_samp_dist
-from gsa import morris_seperate
-from gsa import calculate_morris
+
+
+from UQLibrary.gsa import get_morris_poi_sample
+from UQLibrary.sampling import saltelli_sample
+from UQLibrary.sampling import get_samp_dist
+from UQLibrary.gsa import morris_seperate
+from UQLibrary.gsa import calculate_morris
 
 #==============================================================================
 #------------------------------Morris Calculations-----------------------------
